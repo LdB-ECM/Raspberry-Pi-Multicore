@@ -16,6 +16,6 @@ All the MMU is doing at this stage is providing a basic 1:1 map on the standard 
 >
 In a later excercise we will play with different aspects of virtualization and protection which the MMU offers that bring more safety and even a bit more speed.
 > 
-The reason for not including the MMU in the first start point is as we setup complex schedulers the MMU creates an additional complexity. So on the initial setup of those examples we will run first without MMU and then discuss the changes needed to turn the MMU back on. 
+The reason for not including the MMU in the first start point is as we setup complex schedulers the MMU creates an additional complexity. So on the initial setup of those examples we will run first without MMU and then discuss the changes needed to turn the MMU back on and then implement them.
 >
 As the cores are running independently we don't have issues in this code with cache coherency. However as the cores start communicating and sharing data that situation changes dramatically.
