@@ -15,8 +15,8 @@ Now currently the task switcher is operating on a fixed tick cycle but it is imp
 ~~~
 void xTickISR(void)
 {
-	xTaskIncrementTick();										// Run the timer tick
-	xSchedule();													  // Run scheduler selecting next task 
+	xTaskIncrementTick();                   // Run the timer tick
+	xSchedule();				// Run scheduler selecting next task 
 	EL0_Timer_Set(m_nClockTicksPerHZTick);	// Set EL0 timer again for timer tick period
 }
 ~~~
