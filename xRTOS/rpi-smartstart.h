@@ -630,7 +630,6 @@ uint32_t mailbox_read (MAILBOX_CHANNEL channel);
 .         False for failure and the response buffer is untouched.
 .--------------------------------------------------------------------------*/
 bool mailbox_tag_message (uint32_t* response_buf,					// Pointer to response buffer (NULL = no response wanted)
-						  uint8_t response_count,					// Number of uint32_t response space in that buffer
 						  uint8_t data_count,						// Number of uint32_t data to be set for call
 						  ...);										// Variadic uint32_t values for call
 

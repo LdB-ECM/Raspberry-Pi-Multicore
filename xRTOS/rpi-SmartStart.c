@@ -1060,7 +1060,6 @@ uint32_t mailbox_read (MAILBOX_CHANNEL channel)
 .         False for failure and the response buffer is untouched.
 .--------------------------------------------------------------------------*/
 bool mailbox_tag_message (uint32_t* response_buf,					// Pointer to response buffer
-						  uint8_t response_count,					// Number of uint32_t response space in that buffer
 						  uint8_t data_count,						// Number of uint32_t variadic data following
 						  ...)										// Variadic uint32_t values for call
 {
@@ -1093,8 +1092,8 @@ bool mailbox_tag_message (uint32_t* response_buf,					// Pointer to response buf
 
 	if (message[1] == 0x80000000) {									// Check success flag
 		if (response_buf) {											// If buffer NULL used then don't want response
-			for (int i = 0; i < response_count; i++)
-				response_buf[i] = message[5 + i];					// Transfer out each response message
+			for (int i = 0; i < data_count; i++)
+				response_buf[i] = message[2 + i];					// Transfer out each response message
 		}
 		return true;												// message success
 	}
@@ -1122,13 +1121,13 @@ void ClearTimerIrq (void)
 .--------------------------------------------------------------------------*/
 bool TimerSetup (uint32_t period_in_us)								// Peripheral clock timer period in usec
 {
-	uint32_t Buffer[2] = { 0 };
+	uint32_t Buffer[5] = { 0 };
 	bool resValue = false;
 	ARMTIMER->Control.TimerEnable = 0;								// Make sure clock is stopped, illegal to change anything while running
-	if (mailbox_tag_message(&Buffer[0], 2, 5,						// Two uint32_t responses being clock id and speed and 5 variadics passed
+	if (mailbox_tag_message(&Buffer[0], 5,							// Two uint32_t responses being clock id and speed and 5 variadics passed
 		MAILBOX_TAG_GET_CLOCK_RATE,	8, 8, 4, 0))					// Get GPU clock (it varies between 200-450Mhz)
 	{
-		volatile uint32_t divisor = Buffer[1] / 250;				// The prescaler divider is set to 250 (based on GPU=250MHz to give 1Mhz clock)
+		volatile uint32_t divisor = Buffer[4] / 250;				// The prescaler divider is set to 250 (based on GPU=250MHz to give 1Mhz clock)
 		divisor /= 10000;											// Divid by 10000 we are trying to hold some precision should be in low hundreds (160'ish)
 		divisor *= period_in_us;									// Multiply by the micro seconds result
 		divisor /= 100;												// This completes the division by 1000000 (done as /10000 and /100)
@@ -1276,11 +1275,11 @@ bool LocalTimerFiqSetup (uint32_t period_in_us,						// Period between timer int
 .--------------------------------------------------------------------------*/
 bool miniuart_init (unsigned int baudrate)
 {
-	uint32_t Buffer[2] = { 0 };
-	if (mailbox_tag_message(&Buffer[0], 2, 5,						// Two uint32_t responses being clock id and clock speed and 5 variadics follow
+	uint32_t Buffer[5] = { 0 };
+	if (mailbox_tag_message(&Buffer[0], 5,							// Two uint32_t responses being clock id and clock speed and 5 variadics follow
 		MAILBOX_TAG_GET_CLOCK_RATE,	8, 8, CLK_CORE_ID, 0)) 			// Get core clock frequency check for fail 
 	{
-		uint32_t Divisor = (Buffer[1] / (baudrate * 8)) - 1;		// Calculate divisor
+		uint32_t Divisor = (Buffer[4] / (baudrate * 8)) - 1;		// Calculate divisor
 		if (Divisor <= 0xFFFF) {
 			PUT32(AUX_ENABLES, 1);									// Enable miniuart
 
@@ -1350,7 +1349,7 @@ bool pl011_uart_init (unsigned int baudrate)
 	PL011UART->CR.Raw32 = 0;										// Disable all the UART
 	gpio_setup(14, GPIO_ALTFUNC0);									// GPIO 14 to ALT FUNC0 mode
 	gpio_setup(15, GPIO_ALTFUNC0);									// GPIO 15 to ALT FUNC0 mode
-	if (mailbox_tag_message(0, 0, 5,								// No response required and 5 variadics follow
+	if (mailbox_tag_message(0, 5,									// No response required and 5 variadics follow
 		MAILBOX_TAG_SET_CLOCK_RATE,	8, 8, CLK_UART_ID, 4000000))	// Set UART clock frequency to 4Mhz
 	{
 		uint32_t divisor, fracpart;
@@ -1419,25 +1418,25 @@ bool set_Activity_LED (bool on) {
 	// THIS IS ALL BASED ON PI MODEL HISTORY: 
     // https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
 	if (!ModelCheckHasRun) {
-		uint32_t model[1];
+		uint32_t model[4];
 		ModelCheckHasRun = true;									// Set we have run the model check
-		if (mailbox_tag_message(&model[0], 1, 4,					// One uint32_t responses being model id and 4 variadics follow
+		if (mailbox_tag_message(&model[0], 4,						// Model id and 4 variadics follow
 			MAILBOX_TAG_GET_BOARD_REVISION, 4, 4, 0))				// Fetch the model revision from mailbox   
 		{
 			model[0] &= 0x00FFFFFF;									// Mask off the warranty upper 8 bits
-			if ((model[0] >= 0x0002) && (model[0] <= 0x000f))		// These are Model A,B which use GPIO 16
+			if ((model[3] >= 0x0002) && (model[3] <= 0x000f))		// These are Model A,B which use GPIO 16
 			{														// Model A, B return 0x0002 to 0x000F
 				ActivityGPIOPort = 16;								// GPIO port 16 is activity led
 				UseExpanderGPIO = false;							// Dont use expander GPIO
 			}
-			else if (model[0] < 0xa02082) {							// These are Pi2, PiZero or Compute models (They may be ARM7 or ARM8)
+			else if (model[3] < 0xa02082) {							// These are Pi2, PiZero or Compute models (They may be ARM7 or ARM8)
 				ActivityGPIOPort = 47;								// GPIO port 47 is activity led
 				UseExpanderGPIO = false;							// Dont use expander GPIO
 			}
-			else if ( (model[0] == 0xa02082) ||
-					  (model[0] == 0xa020a0) ||
-					  (model[0] == 0xa22082) ||
-					  (model[0] == 0xa32082) )						// These are Pi3B series originals (ARM8)
+			else if ( (model[3] == 0xa02082) ||
+					  (model[3] == 0xa020a0) ||
+					  (model[3] == 0xa22082) ||
+					  (model[3] == 0xa32082) )						// These are Pi3B series originals (ARM8)
 			{
 				ActivityGPIOPort = 130;								// GPIO port 130 is activity led
 				UseExpanderGPIO = true;								// Must use expander GPIO
@@ -1449,7 +1448,7 @@ bool set_Activity_LED (bool on) {
 		} else return (false);										// Model check message failed
 	}
 	if (UseExpanderGPIO) {											// Activity LED uses expander GPIO
-		return (mailbox_tag_message(0, 0, 5, MAILBOX_TAG_SET_GPIO_STATE, 
+		return (mailbox_tag_message(0, 5, MAILBOX_TAG_SET_GPIO_STATE, 
 			8, 8, ActivityGPIOPort, (uint32_t)on));					// Mailbox message,set GPIO port 130, on/off
 	} else gpio_output(ActivityGPIOPort, on);						// Not using GPIO expander so use standard GPIO port
 	return (true);													// Return success
@@ -1467,9 +1466,9 @@ bool set_Activity_LED (bool on) {
 . RETURN: True maxium speed was successfully set, false otherwise
 .--------------------------------------------------------------------------*/
 bool ARM_setmaxspeed (int(*prn_handler) (const char *fmt, ...)) {
-	uint32_t Buffer[2] = { 0 };
-	if (mailbox_tag_message(&Buffer[0], 2, 5, MAILBOX_TAG_GET_MAX_CLOCK_RATE, 8, 8, CLK_ARM_ID, 0))
-		if (mailbox_tag_message(&Buffer[0], 2, 5, MAILBOX_TAG_SET_CLOCK_RATE, 8, 8, CLK_ARM_ID, Buffer[1])) {
+	uint32_t Buffer[5] = { 0 };
+	if (mailbox_tag_message(&Buffer[0], 5, MAILBOX_TAG_GET_MAX_CLOCK_RATE, 8, 8, CLK_ARM_ID, 0))
+		if (mailbox_tag_message(&Buffer[0], 5, MAILBOX_TAG_SET_CLOCK_RATE, 8, 8, CLK_ARM_ID, Buffer[4])) {
 			if (prn_handler) prn_handler("CPU frequency set to %u Hz\n", Buffer[1]);
 			return true;											// Return success
 		}
