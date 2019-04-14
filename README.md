@@ -4,3 +4,4 @@ This is a series of test code with multicore task schedulers and concepts. This 
 The first step is xRTOS our start point with a 4 core switcher with simple round robin task schedule. Each core is manually loaded with 2 tasks and will create an idle task when started. The 2 tasks per core are simple moving the bars on screen at this stage.
 >https://github.com/LdB-ECM/Raspberry-Pi-Multicore/tree/master/xRTOS
 ![](https://github.com/LdB-ECM/Docs_and_Images/blob/master/Images/xRTOS.jpg?raw=true)
+![](https://github.com/LdB-ECM/Docs_and_Images/blob/master/Images/xRTOS-Schedulers.jpg?raw=true)
