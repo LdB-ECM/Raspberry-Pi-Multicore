@@ -5,3 +5,6 @@ As per usual you can simply copy the files in the DiskImg directory onto a forma
 So in this example we have 4 cores running round robin schedulers each with there own independant scheduler.
 >
 ![](https://github.com/LdB-ECM/Docs_and_Images/blob/master/Images/xRTOS-Schedulers.jpg?raw=true)
+>
+In later examples we will play with a single centralized scheduler and also a more complex L1/L2 scheduler
+![](https://github.com/LdB-ECM/Docs_and_Images/blob/master/Images/xRTOS_L1_and_L2_scheduler.jpg?raw=true)
