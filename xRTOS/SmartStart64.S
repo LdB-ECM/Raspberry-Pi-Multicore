@@ -288,19 +288,21 @@ StartSecondarySpin:
 	MRS		X2, ELR_EL1
 	STP 	X2, X3, [SP, #-0x10]!
 
-	/* Save the critical section nesting depth. */
-	LDR		X0, =ulCriticalNesting
-	LDR		X3, [X0]
-	//ADD		X2, X3, #1
-	//STR		X2, [X0]
+	/* Fetch core Id and multiply x8 as an offset */
+	MRS		X1, MPIDR_EL1
+	AND		X1, X1, #0x3
+	LSL		X1, X1, #3
 
-	/* Save the FPU context indicator. */
-	LDR		X0, =ulTaskHasFPUContext
-	LDR		X2, [X0]
+	/* Fetch current task stack top and add core id offset */
+	LDR 	X0, =RPi_coreCB_PTR
+	ADD		X0, X0, X1
+	LDR 	X1, [X0]
+	LDR     X1, [X1]
 
-	/* Save the FPU context, if any (32 128-bit registers). */
-	CMP		X2, #0
-	B.EQ	1f
+	/* Save FPU registers if task has FPU use flag set in pxflags */
+	LDR		X3, [x1, #8]			// Load pxFlags
+	CMP     X3, 0
+    BGE     1f
 	STP		Q0, Q1, [SP,#-0x20]!
 	STP		Q2, Q3, [SP,#-0x20]!
 	STP		Q4, Q5, [SP,#-0x20]!
@@ -317,21 +319,7 @@ StartSecondarySpin:
 	STP		Q26, Q27, [SP,#-0x20]!
 	STP		Q28, Q29, [SP,#-0x20]!
 	STP		Q30, Q31, [SP,#-0x20]!
-
 1:
-	/* Store the critical nesting count and FPU context indicator. */
-	STP 	X2, X3, [SP, #-0x10]!
-
-	/* Fetch core Id and multiply x8 as an offset */
-	MRS		X1, MPIDR_EL1
-	AND		X1, X1, #0x3
-	LSL		X1, X1, #3
-
-	/* Fetch current task stack top and add core id offset */
-	LDR 	X0, =RPi_coreCB_PTR
-	ADD		X0, X0, X1
-	LDR 	X1, [X0]
-	LDR     X1, [X1]
 
 	/* Now save the new SP value as core RPi_CurrentTaskStackTop */
 	MOV 	X0, SP   /* Move SP into X0 for saving. */
@@ -341,6 +329,7 @@ StartSecondarySpin:
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {							restore Context MACRO							}
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
 .macro portRESTORE_CONTEXT
 	/* Fetch core Id and multiply x8 as an offset */
 	MRS		X1, MPIDR_EL1
@@ -352,22 +341,13 @@ StartSecondarySpin:
 	ADD		X0, X0, X1
 	LDR		X1, [X0]
 	LDR     X1, [X1]
-	ldr		X0, [X1]
+	LDR		X0, [X1]
 	MOV		SP, X0
 
-	LDP 	X2, X3, [SP], #0x10  /* Critical nesting and FPU context. */
-
-	/* Set the PMR register to be correct for the current critical nesting	depth. */
-	LDR		X0, =ulCriticalNesting /* X0 holds the address of ullCriticalNesting. */
-	STR		X3, [X0]					/* Restore the task critical nesting count. */
-
-	/* Restore the FPU context indicator. */
-	LDR		X0, =ulTaskHasFPUContext
-	STR		X2, [X0]
-
-	/* Restore the FPU context, if any. */
-	CMP		X2, #0
-	B.EQ	1f
+	/* Restore FPU registers if task has FPU use flag set in pxflags */
+	LDR		X3, [X1, #8]			// Load pxFlags
+	CMP     X3, 0
+    BGE     1f
 	LDP		Q30, Q31, [SP], #0x20
 	LDP		Q28, Q29, [SP], #0x20
 	LDP		Q26, Q27, [SP], #0x20
@@ -411,8 +391,6 @@ StartSecondarySpin:
 
 	ERET
 .endm
-
-
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 { DEFAULT IRQ HANDLERS STUB ON WEAK REFERENCE PROVIDE BY RPi-SmartStart API	}
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -899,10 +877,6 @@ taskInitialiseStack:
 	mov x3, # 0x345
 	str x3, [x0, #-8]!           // portINITIAL_PSTATE
 	str x1, [x0, #-8]!           // pxCode address
-	mov x3, #0x0000000000000000
-	str x3, [x0, #-8]!           //  pxContextFlags
-	mov x3, #0x0000000000000000
-	str x3, [x0, #-8]!           //  xzr
 	ret										// Return
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here

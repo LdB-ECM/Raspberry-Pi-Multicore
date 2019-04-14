@@ -25,12 +25,21 @@
 
 typedef struct TaskControlBlock* task_ptr;
 
+/*--------------------------------------------------------------------------}
+{						 TASK LIST STRUCTURE DEFINED						}
+{---------------------------------------------------------------------------}
+.  A task list is a simple double link list of tasks. Each task control
+.  block conatins a prev and next pointer. Starting at the head task in the 
+.  list structure and moving thru each task next pointer you will arrive at
+.  the tail pointer in the list being the last task. The head, tail values
+.  will be NULL for a no task situation. The moment you have a task in list
+.  head->prev will be NULL and tail->next will be NULL as error checking.
+.--------------------------------------------------------------------------*/
 typedef struct tasklist
 {
 	struct TaskControlBlock* head;								/*< Head entry for task list */
 	struct TaskControlBlock* tail;								/*< Tail entry for task list */
 } TASK_LIST_t;
-
 
 
 /*--------------------------------------------------------------------------}
@@ -110,7 +119,6 @@ static RegType_t TestStack[16384] __attribute__((aligned(16)));
 static RegType_t* TestStackTop = &TestStack[16384];
 
 RegType_t ulCriticalNesting = 0;
-RegType_t ulTaskHasFPUContext = 0;
 static uint64_t m_nClockTicksPerHZTick = 0;							// Divisor to generat tick frequency
 
 /***************************************************************************}
@@ -363,6 +371,9 @@ void xTaskIncrementTick (void)
 }
 
 
+/*
+ * Simple round robin scheduler on tasks that are in the readyTasks list
+ */
 void xSchedule (void)
 {
 	struct CoreControlBlock* ccb = &coreCB[getCoreID()];			// Pointer to core control block

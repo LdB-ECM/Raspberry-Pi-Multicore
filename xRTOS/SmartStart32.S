@@ -381,12 +381,22 @@ atags:  .4byte 0x100
 	/* Move the value into the Link Register!										*/
 	LDR	LR, [R0]
 
-	/* The critical nesting depth is the first item on the stack. */
-	/* Load it into the ulCriticalNesting variable. */
-	LDR		R0, =ulCriticalNesting
-	LDMFD	LR!, {R1}
-	STR		R1, [R0]
+	/* Restore FPU registers if task has FPU use flag set in pxflags */
+	LDR R0, [R0, #4]									// Fetch pxflags
+    CMP R0, #0
+    BGE  1f
 
+	LDMFD	LR, {R11-R12}^
+	//Restore the Floating point FPEXC from the new stack
+ 	fmxr fpexc, r12
+ 
+	 //Restore the Floating point FPSCR from the new stack
+	fmxr fpscr, r11
+  
+	//Restore the Floating point registers D0 to D15 from the new stack
+	fldmiad LR!, {d0-d15}
+
+1:
 	/* Get the SPSR from the stack. */
 	LDMFD	LR!, {R0}
 	MSR		SPSR_cxsf, R0
@@ -428,10 +438,6 @@ atags:  .4byte 0x100
 	MRS	R0, SPSR
 	STMDB	LR!, {R0}
 
-	LDR	R0, =ulCriticalNesting
-	LDR	R0, [R0]
-	STMDB	LR!, {R0}
-
 	MRC  p15, 0, R1, c0, c0, 5							;@ Fetch core id
 	AND R1, R1, #3										;@ Create core id value 
 	LSL	R1, R1, #2										;@ x4 for core ptr offset
@@ -440,7 +446,21 @@ atags:  .4byte 0x100
 	LDR	R0, =RPi_coreCB_PTR
 	ADD R0, R0, R1
 	LDR	R0, [R0]										;@ Fetch core control block pointer
+	
+	/* Save FPU registers if task has FPU use flag set in pxflags */
+	LDR	R1, [R0, #4]									;@ load pxFlags
+    CMP R1, #0
+    BGE     1f	
 
+	//Save the Floating point registers D0 to D15 onto the old stack
+	fstmdbd LR!, {d0-d15}
+ 
+	//Save the Floating point FPSCR, FPEXC onto the old stack
+	fmrx r11, fpscr
+	fmrx r12, fpexc
+	STMDB	LR,{R11-R12}^
+
+1:
 	LDR	R0, [R0]
 	STR	LR, [R0]
 
@@ -649,27 +669,6 @@ CoreExecuteFail:
 ;@"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
 ;@"========================================================================="
-@#		setIrqFuncAddress -- Composite Pi1, Pi2 & Pi3 code
-@#		C Function: uintptr_t setIrqFuncAddress (void (*ARMaddress)(void));
-@#		Entry: R0 will have ARMAddress value
-@#		Return: R0 will return with the previous Irq function address
-;@"========================================================================="
-.section .text.setIrqFuncAddress, "ax", %progbits
-.balign	4
-.globl setIrqFuncAddress;
-.type setIrqFuncAddress, %function
-setIrqFuncAddress:
-    cpsid i												// Disable irq interrupts as we are clearly changing call
-	ldr r1, =RPi_IrqFuncAddr							// Load address of function to call on interrupt 
-	ldr r2, [r1]										// Load current irq call address
-	str r0, [r1]										// Store the new function pointer address we were given
-	mov r0, r2											// return the old call function
-	bx  lr												// Return
-.balign	4
-.ltorg													// Tell assembler ltorg data for this code can go here
-.size	setIrqFuncAddress, .-setIrqFuncAddress
-
-;@"========================================================================="
 @#		setFiqFuncAddress -- Composite Pi1, Pi2 & Pi3 code
 @#		C Function: uintptr_t setFiqFuncAddress (void (*ARMaddress)(void));
 @#		Entry: R0 will have ARMAddress value
@@ -849,8 +848,6 @@ taskInitialiseStack:
 	str r2, [r0, #-4]!           //  r0   (pvParameters)
 	mov r3, #0x1f                // System mode, ARM mode
     str r3, [r0, #-4]!           // System mode register
-	mov r3, #0
-	str r3, [r0, #-4]!           // Nesting count set to zero
 	bx  lr												// Return
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
