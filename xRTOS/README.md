@@ -11,3 +11,13 @@ So in this example we have 4 cores running round robin schedulers each with ther
 In later examples we will play with a single centralized scheduler which should be obious and also a more complex L1/L2 scheduler which is shown in the diagram below
 >
 ![](https://github.com/LdB-ECM/Docs_and_Images/blob/master/Images/xRTOS_L1_and_L2_scheduler.jpg?raw=true)
+Now currently the task switcher is operating on a fixed tick cycle but it is important to realize it does not have to be that way. At the end of each interrupt the EL0 timer is set to interrupt by a delay period value. If you know your task characteristics you can load the value with the expected task duration and run in what is usually called a dynamic tick switcher. So that would involve writing a different delay value in EL0_Timer_Set in the code below
+~~~
+void xTickISR(void)
+{
+	xTaskIncrementTick();										// Run the timer tick
+	xSchedule();													  // Run scheduler selecting next task 
+	EL0_Timer_Set(m_nClockTicksPerHZTick);	// Set EL0 timer again for timer tick period
+}
+~~~
+
