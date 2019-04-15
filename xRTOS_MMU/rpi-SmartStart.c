@@ -1469,7 +1469,7 @@ bool ARM_setmaxspeed (int(*prn_handler) (const char *fmt, ...)) {
 	uint32_t Buffer[5] = { 0 };
 	if (mailbox_tag_message(&Buffer[0], 5, MAILBOX_TAG_GET_MAX_CLOCK_RATE, 8, 8, CLK_ARM_ID, 0))
 		if (mailbox_tag_message(&Buffer[0], 5, MAILBOX_TAG_SET_CLOCK_RATE, 8, 8, CLK_ARM_ID, Buffer[4])) {
-			if (prn_handler) prn_handler("CPU frequency set to %u Hz\n", Buffer[1]);
+			if (prn_handler) prn_handler("CPU frequency set to %u Hz\n", Buffer[4]);
 			return true;											// Return success
 		}
 	return false;													// Max speed set failed
