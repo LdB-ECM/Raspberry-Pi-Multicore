@@ -490,6 +490,17 @@ void xStartFirstTask (void);
 RegType_t* taskInitialiseStack (RegType_t* pxTopOfStack, void (*pxCode) (void* pvParameters), void* pvParameters);
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
+{			MMU HELPER ROUTINES PROVIDE BY RPi-SmartStart API			    }
+{++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+/*-[ enable_mmu_tables ]----------------------------------------------------}
+. NOTE: Public C interface only to code located in SmartsStartxx.S
+. The given map1to1 TLB table and virtual map TLB table are enabled. The
+. assumption is you have built valid TLB tables.
+.--------------------------------------------------------------------------*/
+void enable_mmu_tables (void* map1to1, void* virtualmap);
+
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {		VC4 GPU ADDRESS HELPER ROUTINES PROVIDE BY RPi-SmartStart API	    }
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 

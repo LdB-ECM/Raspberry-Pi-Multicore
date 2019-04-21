@@ -199,7 +199,7 @@ static void prvIdleTask(void* pvParameters)
 {--------------------------------------------------------------------------*/
 static void StartTasksOnCore(void)
 {
-	enable_mmu();													// Enable MMU											
+	MMU_enable();													// Enable MMU											
 	EL0_Timer_Set(m_nClockTicksPerHZTick);							// Set the EL0 timer
 	EL0_Timer_Irq_Setup();											// Setup the EL0 timer interrupt
 
@@ -304,8 +304,8 @@ void xTaskStartScheduler( void )
 	/* Calculate divisor to create Timer Tick frequency on EL0 timer */
 	m_nClockTicksPerHZTick = (EL0_Timer_Frequency() / configTICK_RATE_HZ);
 
-	/* Initialize MMU table */
-	setup_pagetable();
+	/* MMU table setup done by core 0 */
+	MMU_setup_pagetable();
 
 	/* Start each core in reverse order because core0 is running this code  */
 	CoreExecute(3, StartTasksOnCore);								// Start tasks on core3

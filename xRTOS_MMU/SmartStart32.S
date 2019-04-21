@@ -854,6 +854,43 @@ taskInitialiseStack:
 .size	.taskInitialiseStack, .-taskInitialiseStack
 
 
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
+{			MMU HELPER ROUTINES PROVIDE BY RPi-SmartStart API			    }
+{++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+#define SCTLR_ICACHE_ENABLE				(1<<12)
+#define SCTLR_BRANCH_PREDICTOR_ENABLE	(1<<11)
+#define SCTLR_CACHE_ENABLE				(1<<2)
+#define SCTLR_MMU_ENABLE				(1<<0)
+
+/* "PROVIDE C Function: void enable_mmu_tables ( void* map1to1, void* virtualmap);" */
+.section .text.enable_mmu_tables, "ax", %progbits
+.balign	4
+.globl enable_mmu_tables;
+.type enable_mmu_tables, %function
+enable_mmu_tables:
+	mcr p15, 0, r0, c2, c0, 0					/* Set map1to1 to TBBR0 */
+	MCR p15, 0, r1, c2, c0, 1					/* Write virtualmap to TTBR1 */
+	/* Set the access control to all-supervisor */
+	mov r0, #~0
+	mcr p15, 0, r0, c3, c0, 0
+
+	mrc p15, 0,  r0, c1, c0, 0
+	/* Enable MMU 8 */
+	orr r0, r0, #SCTLR_MMU_ENABLE
+	/* Enable branch predictor */
+	orr r0, r0, #SCTLR_BRANCH_PREDICTOR_ENABLE
+	/* Enable caches! */
+	orr r0, r0, #SCTLR_CACHE_ENABLE
+	orr r0, r0, #SCTLR_ICACHE_ENABLE
+	/* Write SCTLR register */
+	mcr p15, 0, r0, c1, c0, 0
+	/* barrier */
+	isb
+
+	bx lr
+.balign	4
+.ltorg										// Tell assembler ltorg data for this code can go here
+.size	.enable_mmu_tables, .-enable_mmu_tables
 ;@"*************************************************************************"
 @#          INTERNAL DATA FOR SMARTSTART NOT EXPOSED TO INTERFACE			
 ;@"*************************************************************************"
