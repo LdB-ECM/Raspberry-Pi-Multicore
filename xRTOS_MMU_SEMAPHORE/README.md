@@ -14,7 +14,7 @@ So we extend our start example so each task1 on each core will increment a simpl
 >
 So we create a screen semaphore at the very start of main.
 >
-```static SemaphoreHandle_t screenSem;
+```>static SemaphoreHandle_t screenSem;
 >
 screenSem = xSemaphoreCreateBinary();
 ```  
