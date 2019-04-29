@@ -854,6 +854,104 @@ taskInitialiseStack:
 .size	.taskInitialiseStack, .-taskInitialiseStack
 
 
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
+{			MMU HELPER ROUTINES PROVIDE BY RPi-SmartStart API			    }
+{++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+#define SCTLR_ICACHE_ENABLE				(1<<12)
+#define SCTLR_BRANCH_PREDICTOR_ENABLE	(1<<11)
+#define SCTLR_CACHE_ENABLE				(1<<2)
+#define SCTLR_MMU_ENABLE				(1<<0)
+
+/* "PROVIDE C Function: void enable_mmu_tables ( void* map1to1, void* virtualmap);" */
+.section .text.enable_mmu_tables, "ax", %progbits
+.balign	4
+.globl enable_mmu_tables;
+.type enable_mmu_tables, %function
+enable_mmu_tables:
+   	mcr p15, 0, r0, c2, c0, 0					/* Set map1to1 to TBBR0 */
+	MCR p15, 0, r1, c2, c0, 1					/* Write virtualmap to TTBR1 */
+
+	MRC p15, 0, r0, c2, c0, 2					/* Read TTBCR into R0 */
+	ORR r0, r0, #1								/* Set N = 1 */						
+	MCR p15, 0, r0, c2, c0, 2					/* Write R0 to TTBCR */
+
+	/* Set the access control to all-supervisor */
+	mov r0, #~0
+	mcr p15, 0, r0, c3, c0, 0
+
+	mrc p15, 0, r0, c1, c0,  1
+	orr r0, r0, #(1 << 6)
+	mcr p15, 0, r0, c1, c0,  1
+
+	mov r0, #1
+	mcr p15, 0, r0, c3, c0,  0
+
+	mrc p15, 0,  r0, c1, c0, 0
+	/* Enable MMU 8 */
+	orr r0, r0, #SCTLR_MMU_ENABLE
+	/* Enable branch predictor */
+	orr r0, r0, #SCTLR_BRANCH_PREDICTOR_ENABLE
+	/* Enable caches! */
+	orr r0, r0, #SCTLR_CACHE_ENABLE
+	orr r0, r0, #SCTLR_ICACHE_ENABLE
+	/* Write SCTLR register */
+	mcr p15, 0, r0, c1, c0, 0
+	/* barrier */
+	isb
+
+
+	bx lr
+.balign	4
+.ltorg										// Tell assembler ltorg data for this code can go here
+.size	.enable_mmu_tables, .-enable_mmu_tables
+
+
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
+{			SEMAPHORE ROUTINES PROVIDE BY RPi-SmartStart API			    }
+{++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+;@"========================================================================="
+@#	semaphore_inc -- AARCH32 Pi1, Pi2, Pi3 code
+@#	C Function: "void semaphore_inc (uint32_t* sem);"
+@#	Entry: R0 will have semaphore address value
+@#	Return: nothing
+;@"========================================================================="
+.section .text.semaphore_inc, "ax", %progbits
+.balign	4
+.globl semaphore_inc;
+.type semaphore_inc, %function
+semaphore_inc:
+	ldrex r1, [r0]
+	cmp r1, #0
+	bne semaphore_inc
+	mov r2,  #1
+	strex r3, r2, [r0]
+	cmp r3, #0
+	bne semaphore_inc
+	dmb
+    BX LR
+.balign	4
+.ltorg										// Tell assembler ltorg data for this code can go here
+.size	semaphore_inc, .-semaphore_inc
+
+//"========================================================================="
+//	semaphore_dec -- Composite Pi1, Pi2 & Pi3 code
+//	C Function: "void semaphore_dec (uint32_t* sem);"
+//	Entry: X0 will have semaphore address value
+//	Return: nothing
+//"========================================================================="
+.section .text.semaphore_dec, "ax", %progbits
+.balign	4
+.globl semaphore_dec;
+.type semaphore_dec, %function
+semaphore_dec:
+	mov r1, #0
+	str r1, [r0]
+	dmb
+    BX      lr
+.balign	4
+.ltorg										// Tell assembler ltorg data for this code can go here
+.size	semaphore_dec, .-semaphore_dec
+
 ;@"*************************************************************************"
 @#          INTERNAL DATA FOR SMARTSTART NOT EXPOSED TO INTERFACE			
 ;@"*************************************************************************"
