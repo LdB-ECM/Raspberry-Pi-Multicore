@@ -2,6 +2,8 @@
 # xRTOS ... PI 3 AARCH64 and PI 2,3 AARCH32
 As per usual you can simply copy the files in the DiskImg directory onto a formatted SD card and place in Pi to test
 >
+![](https://github.com/LdB-ECM/Docs_and_Images/blob/master/Images/xRTOS_SEMS.jpg?raw=true)
+>
 So in this code we begin our work with synchronizing primitives, we start here with a simple Binary Semaphore.
 
 A binary semaphore is a synchronization object that can have only two states:
