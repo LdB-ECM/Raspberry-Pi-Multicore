@@ -8,7 +8,7 @@ A binary semaphore is a synchronization object that can have only two states:
 1. Not taken.
 2. Taken.
 
-Taking a binary semaphore brings it in the “taken” state, trying to take a semaphore that is already taken on this simple example will suspend the calling task indefinitely until the semaphore is "given" back. "Giving" a semaphore that is in the not taken state has no effect.
+Taking a binary semaphore brings it in the “taken” state. Trying to take a semaphore that is already taken will suspend the calling task indefinitely until the semaphore is "given" back. "Giving" a semaphore that is in the not taken state has no effect it will harmless pass thru.
 >
 So we extend our start example so each task1 on each core will increment a simple counter. We wish to use printf to display that count but only 1 core at a time can use printf otherwise it scrambles the various outputs.
 >
@@ -23,6 +23,8 @@ Now before each task prints, the task takes the screen Semaphore. Thus if more t
 >
 The net result is each core can use the printf function to display it's count without conflict.
 >
-Now there is an obvious problem that any task waiting to take the binary semaphore is still in the readylist and thus it using CPU power to basically sit in a loop waiting for the semaphore to be given back. As we only have 1 printf line of a simple integer the wait processing power is barely noticable. However on complex samples that CPU time wasting could be significant. What we really want is a task waiting to take a binary semaphore to be taken from the readylist so it cost no CPU load (like vTaskDelay does). The task that has the binary semaphore as it gives the binary semaphore back should signal the waiting task effectively putting it back in the readyList so it can then run it's printf.
+Now there is an obvious problem that any task waiting to take the binary semaphore is still in the readylist and thus it using CPU power to basically sit in a loop waiting for the semaphore to be given back. As we only have 1 printf line of a simple integer the wait processing power is barely noticeable. However on complex samples that CPU time wasting could be significant. What we really want is a task waiting to take a binary semaphore to be taken from the readylist so it cost no CPU load (like vTaskDelay does). The task that has the binary semaphore as it gives the binary semaphore back should signal the waiting task effectively putting it back in the readyList so it can then run it's printf.
 >
-So that is our next step to organize synchronization primitives that includes signalling.
+So that is our next step to organize synchronization primitives that includes signaling.
+>
+You will note we have at this stage still left out task priority. If we are going to have priority to the tasks then we will also need priority to the synchronization primitives. If multiple tasks are waiting for a resource then it would usually follow the highest priority task waiting should be given it first. An alternative approach might be when requesting a resource an independent resource priority is given to allow task priority and resource priority to differ. Whatever the case the moment we introduce priority we must consider it everywhere.
