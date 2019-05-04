@@ -5,21 +5,19 @@
 
 ifeq ($(OS), Windows_NT)
 	#WINDOWS USE THESE DEFINITIONS
-	RM = -del /q /f
+	RM = -del /q
 	SLASH = \\
-	SWALLOW_OUTPUT = >nul 2>nul
 else
 	#LINUX USE THESE DEFINITIONS
 	RM = -rm -f
 	SLASH = /
-	SWALLOW_OUTPUT =
 endif 
 
 
 Pi3-64: CFLAGS = -Wall -O3 -mcpu=cortex-a53+fp+simd -ffreestanding -nostartfiles -std=c11 -mstrict-align -fno-tree-loop-vectorize -fno-tree-slp-vectorize -Wno-nonnull-compare
 Pi3-64: ARMGNU = D:/gcc_linaro_7_4_1/bin/aarch64-elf
 Pi3-64: LINKERFILE = rpi64.ld
-Pi3-64:	SMARTSTART = SmartStart64.S
+Pi3-64: SMARTSTART = SmartStart64.S
 Pi3-64: IMGFILE = kernel8.img
 
 Pi3: CFLAGS = -Wall -O3 -mcpu=cortex-a53 -mfpu=neon-vfpv4 -mfloat-abi=hard -ffreestanding -nostartfiles -std=c11 -mno-unaligned-access -fno-tree-loop-vectorize -fno-tree-slp-vectorize -Wno-nonnull-compare
@@ -49,7 +47,7 @@ Pi1:
 
 # The directory in which source files are stored.
 SOURCE = ${CURDIR}
-BUILD = build
+BUILD = Build
 
 
 # The name of the assembler listing file to generate.
@@ -61,7 +59,7 @@ MAP = kernel.map
 # The names of all object files that must be generated. Deduced from the 
 # assembly code files in source.
 
-ASMOBJS = $(SOURCE)/$(SMARTSTART)
+ASMOBJS = $(patsubst $(SOURCE)/%.S,$(BUILD)/%.o,$(SMARTSTART))
 COBJS = $(patsubst $(SOURCE)/%.c,$(BUILD)/%.o,$(wildcard $(SOURCE)/*.c))
 
 
