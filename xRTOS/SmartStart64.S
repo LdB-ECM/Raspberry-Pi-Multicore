@@ -1062,16 +1062,16 @@ enable_mmu_tables:
 .globl semaphore_take;
 .type semaphore_take, %function
 semaphore_take:
-	mrs		X4, daif				// Hold DAIF flags
-	msr		daifset, #2				// Disable Irq
-    mov		w2, #1
+    mrs	X4, daif				// Hold DAIF flags
+    msr	daifset, #2				// Disable Irq
+    mov	w2, #1
 semaphore_take_loop:
-    ldaxr   w1, [x0]
-    stxr    w3, w2, [x0]
-    cbnz    w3, semaphore_take_loop
-	cbnz    w1, semaphore_take_loop
-	dmb ish
-	msr daif, X4					// Restore DAIF flags to whatever they were
+    ldaxr     w1, [x0]
+    cbnz     w1, semaphore_take_loop
+    stxr       w3, w2, [x0]
+    cbnz     w3, semaphore_take_loop
+    dmb ish
+    msr daif, X4					// Restore DAIF flags to whatever they were
     ret
 .size	semaphore_take, .-semaphore_take
 
