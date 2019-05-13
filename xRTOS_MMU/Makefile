@@ -89,7 +89,7 @@ $(BUILD)/%.o: $(SOURCE)/%.c
 	$(ARMGNU)-gcc -MMD -MP -g $(CFLAGS) -c  $< -o $@ -lc -lm -lgcc
 
 kernel.elf: $(ASMOBJS) $(COBJS) 
-	$(ARMGNU)-gcc $(CFLAGS) $(ASMOBJS) $(COBJS) -T $(LINKERFILE) -o kernel.elf -lc -lm -lgcc
+	$(ARMGNU)-gcc $(CFLAGS) $(ASMOBJS) $(COBJS) -T $(LINKERFILE) -Wl,--build-id=none -o kernel.elf -lc -lm -lgcc
 	$(ARMGNU)-objdump -d kernel.elf > $(LIST)
 	$(ARMGNU)-objcopy kernel.elf -O binary DiskImg/$(BINARY)
 	$(ARMGNU)-nm -n kernel.elf > $(MAP)

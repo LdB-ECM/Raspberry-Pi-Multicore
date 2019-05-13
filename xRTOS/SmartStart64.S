@@ -301,6 +301,7 @@ StartSecondarySpin:
 
 	/* Save FPU registers if task has FPU use flag set in pxflags */
 	LDR		X3, [x1, #8]			// Load pxFlags
+	AND		X3, X3, #0x10			// Clear all but save FPU flags
 	CMP     X3, 0
     BGE     1f
 	STP		Q0, Q1, [SP,#-0x20]!
@@ -346,6 +347,7 @@ StartSecondarySpin:
 
 	/* Restore FPU registers if task has FPU use flag set in pxflags */
 	LDR		X3, [X1, #8]			// Load pxFlags
+	AND		X3, X3, #0x10			// Clear all but save FPU flags
 	CMP     X3, 0
     BGE     1f
 	LDP		Q30, Q31, [SP], #0x20
@@ -447,22 +449,34 @@ irq_handler_stub:
 /* So we will need to save registers x0-x7, x8-x15, x16-x18, x29, x30, 				 */
 .weak fiq_handler_stub
 fiq_handler_stub:	
-	stp	x29, x30, [sp, #-16]!							// Store frame pointer and Link register
-	stp	x18, x19,  [sp, #-16]!							// Save register x18, as C will trash it.. 19 just there as a pair
-	stp	x16, x17,  [sp, #-16]!							// Save register x16, x17 as C will trash them
-	stp	x14, x15,  [sp, #-16]!							// Save register x14, x15 as C will trash them
-	stp	x12, x13,  [sp, #-16]!							// Save register x12, x13 as C will trash them
-	stp	x10, x11,  [sp, #-16]!							// Save register x10, x11 as C will trash them
-	stp	x8, x9,  [sp, #-16]!							// Save register x8, x9 as C will trash them
-	stp	x6, x7,  [sp, #-16]!							// Save register x6, x7 as C will trash them
-	stp	x4, x5,  [sp, #-16]!							// Save register x4, x5 as C will trash them
-	stp	x2, x3,  [sp, #-16]!							// Save register x2, x3 as C will trash them
-	stp	x0, x1,  [sp, #-16]!							// Save register x0, x1 as C will trash them
+	/* Save the entire registers */
+	STP 	X0, X1, [SP, #-0x10]!
+	STP 	X2, X3, [SP, #-0x10]!
+	STP 	X4, X5, [SP, #-0x10]!
+	STP 	X6, X7, [SP, #-0x10]!
+	STP 	X8, X9, [SP, #-0x10]!
+	STP 	X10, X11, [SP, #-0x10]!
+	STP 	X12, X13, [SP, #-0x10]!
+	STP 	X14, X15, [SP, #-0x10]!
+	STP 	X16, X17, [SP, #-0x10]!
+	STP 	X18, X19, [SP, #-0x10]!
+	STP 	X20, X21, [SP, #-0x10]!
+	STP 	X22, X23, [SP, #-0x10]!
+	STP 	X24, X25, [SP, #-0x10]!
+	STP 	X26, X27, [SP, #-0x10]!
+	STP 	X28, X29, [SP, #-0x10]!
+	STP 	X30, XZR, [SP, #-0x10]!
 
-	mov x1, sp
-    and x1, x1, #0xF									// Ensure 16-byte stack alignment
+	/* Save the SPSR. */
+	MRS		X3, SPSR_EL1
+	MRS		X2, ELR_EL1
+	STP 	X2, X3, [SP, #-0x10]!
+
+	MOV X1, SP											// Fetch SP
+    AND X1, X1, #0xF									// Ensure 16-byte stack alignment
     sub sp, sp, x1										// adjust stack as necessary
     stp	x1, xzr, [sp, #-16]!							// Store adjustment
+
 
 	ldr x0, =RPi_FiqFuncAddr							// Address to FiqFuncAddr
 	ldr x0, [x0]										// Load FiqFuncAddr value
@@ -473,19 +487,33 @@ no_fiqset:
 	ldp	x1, xzr,  [sp], #16								// Reload adjustment
     add sp, sp, x1										// Un-adjust stack
 
-	ldp	x0, x1,  [sp], #16								// Restore register x0, x1
-	ldp	x2, x3,  [sp], #16								// Restore register x2, x3
-	ldp	x4, x5,  [sp], #16								// Restore register x4, x5
-	ldp	x6, x7,  [sp], #16								// Restore register x6, x7
-	ldp	x8, x9,  [sp], #16								// Restore register x8, x9
-	ldp	x10, x11,  [sp], #16							// Restore register x10, x11
-	ldp	x12, x13,  [sp], #16							// Restore register x12, x13
-	ldp	x14, x15,  [sp], #16							// Restore register x14, x15
-	ldp	x16, x17,  [sp], #16							// Restore register x16, x17
-	ldp	x18, x19,  [sp], #16							// Restore register x18, x19 
-    ldp x29, x30, [sp], #16								// Restore frame pointer and Link register
-	eret
+	LDP 	X2, X3, [SP], #0x10  /* SPSR and ELR. */
 
+	/* Restore the SPSR. */
+	MSR		SPSR_EL1, X3
+	/* Restore the ELR. */
+	MSR		ELR_EL1, X2
+
+	LDP 	X30, XZR, [SP], #0x10
+	LDP 	X28, X29, [SP], #0x10
+	LDP 	X26, X27, [SP], #0x10
+	LDP 	X24, X25, [SP], #0x10
+	LDP 	X22, X23, [SP], #0x10
+	LDP 	X20, X21, [SP], #0x10
+	LDP 	X18, X19, [SP], #0x10
+	LDP 	X16, X17, [SP], #0x10
+	LDP 	X14, X15, [SP], #0x10
+	LDP 	X12, X13, [SP], #0x10
+	LDP 	X10, X11, [SP], #0x10
+	LDP 	X8, X9, [SP], #0x10
+	LDP 	X6, X7, [SP], #0x10
+	LDP 	X4, X5, [SP], #0x10
+	LDP 	X2, X3, [SP], #0x10
+	LDP 	X0, X1, [SP], #0x10
+
+	ERET
+.balign	4
+.ltorg										/* Tell assembler ltorg data for code above can go here */
 
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
@@ -537,8 +565,6 @@ VectorTable:
 EnableInterrupts:
 	msr daifclr,#2
 	ret
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
 .size	EnableInterrupts, .-EnableInterrupts
 
 /* "PROVIDE C FUNCTION: void DisableInterrupts (void);" */
@@ -549,8 +575,6 @@ EnableInterrupts:
 DisableInterrupts:
 	msr daifset,#2
 	ret
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
 .size	DisableInterrupts, .-DisableInterrupts
 
 /* "PROVIDE C FUNCTION: void EnableFIQ (void);" */
@@ -561,8 +585,6 @@ DisableInterrupts:
 EnableFIQ:
 	msr daifclr, #1
 	ret
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
 .size	EnableFIQ, .-EnableFIQ
 
 /* "PROVIDE C FUNCTION: void DisableFIQ (void);" */
@@ -573,33 +595,7 @@ EnableFIQ:
 DisableFIQ:
 	msr daifset, #1
 	ret
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
 .size	DisableFIQ, .-DisableFIQ
-
-/* "PROVIDE C FUNCTION: unsigned long getDAIF (void);" */
-.section .text.getDAIF, "ax", %progbits
-.balign	4
-.globl getDAIF
-.type getDAIF, %function
-getDAIF:
-	mrs x0, daif
-	ret
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
-.size	getDAIF, .-getDAIF
-
-/* "PROVIDE C FUNCTION: void setDAIF (unsigned long flags);" */
-.section .text.setDAIF, "ax", %progbits
-.balign	4
-.globl setDAIF
-.type setDAIF, %function
-setDAIF:
-	msr daif, x0
-	ret
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
-.size	setDAIF, .-setDAIF
 
 //"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 //				RPi-SmartStart API TO MULTICORE FUNCTIONS
@@ -614,8 +610,6 @@ getCoreID:
 	mrs x0, MPIDR_EL1						// Read the CORE id register
 	and x0, x0, #3							// Create a valid core ID mask (0..3)
 	ret	
-.balign	4
-.ltorg
 .size	getCoreID, .-getCoreID
 
 /* "PROVIDE C FUNCTION: bool CoreExecute (uint8_t core, void (*func)(void));" */
@@ -656,8 +650,6 @@ CoreExecuteFail:
 PUT32:
 	str w1,[x0]								// Half word write of value the address
 	ret										// Return
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
 .size	PUT32, .-PUT32
 
 /* "PROVIDE C FUNCTION: uint32_t GET32 (uint32_t addr);" */
@@ -669,8 +661,6 @@ GET32:
 	uxtw x1, w0								// Expand 32bit addr to 64bit addr
     ldr w0,[x1]								// Now read the address
 	ret										// Return
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
 .size	GET32, .-GET32
 
 
@@ -727,6 +717,7 @@ EL0_Timer_Irq_Setup:
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
 .size	EL0_Timer_Irq_Setup, .-EL0_Timer_Irq_Setup
+
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			VC4 ADDRESS HELPER ROUTINES PROVIDE BY RPi-SmartStart API	    }
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -768,27 +759,14 @@ GPUaddrToARMaddr:
 .globl setFiqFuncAddress;
 .type setFiqFuncAddress, %function
 setFiqFuncAddress:
-	msr daifset,#1							// Disable fiq interrupts as we are clearly changing call
 	ldr x1, =RPi_FiqFuncAddr				// Load address of function to call on interrupt 
 	ldr x2, [x1]							// Load current fiq call address
 	str x0, [x1]							// Store the new function pointer address we were given
-	mov x0, x2								// return the old call function
+	mov x2, x0								// transfer x2 for return						
 	ret										// Return
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
 .size	setFiqFuncAddress, .-setFiqFuncAddress
-
-
-.section .text.getSP, "ax", %progbits
-.balign	4
-.globl getSP;
-.type getSP, %function
-getSP:
-	mov x0, sp
-	ret										// Return
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
-.size	.getSP, .-getSP
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {	 	TASK SWITCHER HELPER ROUTINES PROVIDE BY RPi-SmartStart API		    }
@@ -801,6 +779,7 @@ getSP:
 .type xStartFirstTask, %function
 xStartFirstTask:
 	portRESTORE_CONTEXT						// This will restore current task which will jump start the task
+	ret
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
 .size	.xStartFirstTask, .-xStartFirstTask
@@ -874,13 +853,122 @@ taskInitialiseStack:
 	str x3, [x0, #-8]!           //  XZR
 	mov x3, #0x0000000000000000
 	str x3, [x0, #-8]!           //  X30
-	mov x3, # 0x345
+	mov x3, # 0x305				 // Enter with FIQ and IRQ enabled
 	str x3, [x0, #-8]!           // portINITIAL_PSTATE
 	str x1, [x0, #-8]!           // pxCode address
 	ret										// Return
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
 .size	.taskInitialiseStack, .-taskInitialiseStack
+
+
+/* "PROVIDE C FUNCTION: void SwitchTasks (RegType_t oldTask, RegType_t newTask);" */
+.section .text.SwitchTasks, "ax", %progbits
+.balign	4
+.globl SwitchTasks;
+.type SwitchTasks, %function
+SwitchTasks:
+	/* Even though C called must mimic IRQ for compatability */
+	STP 	X0, X1, [SP, #-0x10]!
+	STP 	X2, X3, [SP, #-0x10]!
+	STP 	X4, X5, [SP, #-0x10]!
+	STP 	X6, X7, [SP, #-0x10]!
+	STP 	X8, X9, [SP, #-0x10]!
+	STP 	X10, X11, [SP, #-0x10]!
+	STP 	X12, X13, [SP, #-0x10]!
+	STP 	X14, X15, [SP, #-0x10]!
+	STP 	X16, X17, [SP, #-0x10]!
+	STP 	X18, X19, [SP, #-0x10]!
+	STP 	X20, X21, [SP, #-0x10]!
+	STP 	X22, X23, [SP, #-0x10]!
+	STP 	X24, X25, [SP, #-0x10]!
+	STP 	X26, X27, [SP, #-0x10]!
+	STP 	X28, X29, [SP, #-0x10]!
+	STP 	X30, XZR, [SP, #-0x10]!
+
+	/* Save the SPSR. */
+	MRS		X3, SPSR_EL1
+	MRS		X2, ELR_EL1
+	STP 	X2, X3, [SP, #-0x10]!
+
+	/* Save FPU registers if task has FPU use flag set in pxflags */
+	LDR		X3, [x0, #8]			// Load pxFlags from oldTask
+	CMP     X3, 0
+    BGE     1f
+	STP		Q0, Q1, [SP,#-0x20]!
+	STP		Q2, Q3, [SP,#-0x20]!
+	STP		Q4, Q5, [SP,#-0x20]!
+	STP		Q6, Q7, [SP,#-0x20]!
+	STP		Q8, Q9, [SP,#-0x20]!
+	STP		Q10, Q11, [SP,#-0x20]!
+	STP		Q12, Q13, [SP,#-0x20]!
+	STP		Q14, Q15, [SP,#-0x20]!
+	STP		Q16, Q17, [SP,#-0x20]!
+	STP		Q18, Q19, [SP,#-0x20]!
+	STP		Q20, Q21, [SP,#-0x20]!
+	STP		Q22, Q23, [SP,#-0x20]!
+	STP		Q24, Q25, [SP,#-0x20]!
+	STP		Q26, Q27, [SP,#-0x20]!
+	STP		Q28, Q29, [SP,#-0x20]!
+	STP		Q30, Q31, [SP,#-0x20]!
+1:
+
+	/* Now save the new SP value as old task Top of stack */
+	MOV 	X2, SP   /* Move SP into X2 for saving. */
+	STR 	X2, [X0]
+
+	/* Fetch the stack pointer from new task being restored */
+	LDR		X0, [X1]
+	MOV		SP, X0
+
+	/* Restore FPU registers if task has FPU use flag set in pxflags */
+	LDR		X3, [X1, #8]			// Load pxFlags
+	CMP     X3, 0
+    BGE     2f
+	LDP		Q30, Q31, [SP], #0x20
+	LDP		Q28, Q29, [SP], #0x20
+	LDP		Q26, Q27, [SP], #0x20
+	LDP		Q24, Q25, [SP], #0x20
+	LDP		Q22, Q23, [SP], #0x20
+	LDP		Q20, Q21, [SP], #0x20
+	LDP		Q18, Q19, [SP], #0x20
+	LDP		Q16, Q17, [SP], #0x20
+	LDP		Q14, Q15, [SP], #0x20
+	LDP		Q12, Q13, [SP], #0x20
+	LDP		Q10, Q11, [SP], #0x20
+	LDP		Q8, Q9, [SP], #0x20
+	LDP		Q6, Q7, [SP], #0x20
+	LDP		Q4, Q5, [SP], #0x20
+	LDP		Q2, Q3, [SP], #0x20
+	LDP		Q0, Q1, [SP], #0x20
+2:
+	LDP 	X2, X3, [SP], #0x10  /* SPSR and ELR. */
+
+	/* Restore the SPSR. */
+	MSR		SPSR_EL1, X3
+	/* Restore the ELR. */
+	MSR		ELR_EL1, X2
+
+	LDP 	X30, XZR, [SP], #0x10
+	LDP 	X28, X29, [SP], #0x10
+	LDP 	X26, X27, [SP], #0x10
+	LDP 	X24, X25, [SP], #0x10
+	LDP 	X22, X23, [SP], #0x10
+	LDP 	X20, X21, [SP], #0x10
+	LDP 	X18, X19, [SP], #0x10
+	LDP 	X16, X17, [SP], #0x10
+	LDP 	X14, X15, [SP], #0x10
+	LDP 	X12, X13, [SP], #0x10
+	LDP 	X10, X11, [SP], #0x10
+	LDP 	X8, X9, [SP], #0x10
+	LDP 	X6, X7, [SP], #0x10
+	LDP 	X4, X5, [SP], #0x10
+	LDP 	X2, X3, [SP], #0x10
+	LDP 	X0, X1, [SP], #0x10
+	RET
+.balign	4
+.ltorg										// Tell assembler ltorg data for this code can go here
+.size	.SwitchTasks, .-SwitchTasks
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			MMU HELPER ROUTINES PROVIDE BY RPi-SmartStart API			    }
@@ -956,45 +1044,46 @@ enable_mmu_tables:
 //"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
 //"========================================================================="
-//	semaphore_inc -- AARCH64 Pi3 code
-//	C Function: "void semaphore_inc (uint32_t* sem);"
+//	semaphore_take -- AARCH64 Pi3 code
+//	C Function: "void semaphore_take (uint32_t* sem);"
 //	Entry: X0 will have semaphore address value
 //	Return: nothing
 //"========================================================================="
-.section .text.semaphore_inc, "ax", %progbits
+.section .text.semaphore_take, "ax", %progbits
 .balign	4
-.globl semaphore_inc;
-.type semaphore_inc, %function
-semaphore_inc:
-     mov   w2, 1
-	.p2align 2
+.globl semaphore_take;
+.type semaphore_take, %function
+semaphore_take:
+	mrs		X4, daif				// Hold DAIF flags
+	msr		daifset, #2				// Disable Irq
+	msr		daifset, #1				// Disable Fiq
+    mov		w2, 1
     ldaxr   w1, [x0]
     stxr    w3, w2, [x0]
-    cbnz    w3, semaphore_inc
-    cbnz    w1, semaphore_inc
+    cbnz    w3, semaphore_take
+    cbnz    w1, semaphore_take
 	dmb ish
+	msr daif, X4					// Restore DAIF flags to whatever they were
     ret
-.balign	4
-.ltorg										// Tell assembler ltorg data for this code can go here
-.size	semaphore_inc, .-semaphore_inc
+.size	semaphore_take, .-semaphore_take
 
 //"========================================================================="
-//	semaphore_dec -- Composite Pi1, Pi2 & Pi3 code
-//	C Function: "void semaphore_dec (uint32_t* sem);"
+//	semaphore_give -- Composite Pi1, Pi2 & Pi3 code
+//	C Function: "void semaphore_give (uint32_t* sem);"
 //	Entry: X0 will have semaphore address value
 //	Return: nothing
 //"========================================================================="
-.section .text.semaphore_dec, "ax", %progbits
+.section .text.semaphore_give, "ax", %progbits
 .balign	4
-.globl semaphore_dec;
-.type semaphore_dec, %function
-semaphore_dec:
+.globl semaphore_give;
+.type semaphore_give, %function
+semaphore_give:
 	stlrb	wzr, [x0]
 	dmb ish
 	ret
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
-.size	semaphore_dec, .-semaphore_dec
+.size	semaphore_give, .-semaphore_give
 
 /****************************************************************
        	   DATA FOR SMARTSTART64  NOT EXPOSED TO INTERFACE 

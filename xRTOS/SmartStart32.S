@@ -361,29 +361,23 @@ atags:  .4byte 0x100
 .ltorg													;@ Tell assembler ltorg data for this code can go here
 
 .macro portRESTORE_CONTEXT
-	/* Restore the original stack alignment (see note about 8-byte alignment below).*/
-	ADD SP, SP, r4
-
 	MRC  p15, 0, R1, c0, c0, 5							;@ Fetch core id
 	AND R1, R1, #3										;@ Create core id value 
 	LSL	R1, R1, #2										;@ x4 for core ptr offset
 
 	/* Put the address of the current TCB into R0.									*/
-	LDR	R0, =RPi_coreCB_PTR
-	ADD R0, R0, R1
+	LDR	R0, =RPi_coreCB_PTR								;@ Fetch PI core control block pointer array Address
+	ADD R0, R0, R1										;@ Add coreID x4 to locate table entry  
 	LDR	R0, [R0]										;@ Fetch core control block pointer
+	LDR	R0, [R0]										;@ First item is pxCurrentTCB
 
-
-	/* Load the 32-bit value stored at the address in R1.							*/
-	/* First item in the TCB is the top of the stack for the current TCB.			*/
-	LDR	R0, [R0]
-
-	/* Move the value into the Link Register!										*/
-	LDR	LR, [R0]
+	/* Move the value of TopofStack into the Link Register! */
+	LDR	LR, [R0]										;@ Load TopofStack value into LR
 
 	/* Restore FPU registers if task has FPU use flag set in pxflags */
-	LDR R0, [R0, #4]									// Fetch pxflags
-    CMP R0, #0
+	LDR R0, [R0, #4]									;@ Fetch pxflags
+	AND R0, #0x10										;@ Clear all but FPU save flag
+    CMP R0, #0											;@ check if FPU save flag set
     BGE  1f
 
 	LDMFD	LR, {R11-R12}^
@@ -443,13 +437,15 @@ atags:  .4byte 0x100
 	LSL	R1, R1, #2										;@ x4 for core ptr offset
 
 	/* Store the new top of stack for the task. */
-	LDR	R0, =RPi_coreCB_PTR
-	ADD R0, R0, R1
+	LDR	R0, =RPi_coreCB_PTR								;@ Fetch PI core control block pointer array Address
+	ADD R0, R0, R1										;@ Add coreID x4 to locate table entry  
 	LDR	R0, [R0]										;@ Fetch core control block pointer
-	
+	LDR	R0, [R0]										;@ First item is pxCurrentTCB
+
 	/* Save FPU registers if task has FPU use flag set in pxflags */
 	LDR	R1, [R0, #4]									;@ load pxFlags
-    CMP R1, #0
+	AND R1, #0x10										;@ Mask off all but FPU save flag
+    CMP R1, #0											;@ check if FPU save flag set
     BGE     1f	
 
 	//Save the Floating point registers D0 to D15 onto the old stack
@@ -461,18 +457,7 @@ atags:  .4byte 0x100
 	STMDB	LR,{R11-R12}^
 
 1:
-	LDR	R0, [R0]
-	STR	LR, [R0]
-
-	/* According to the document "Procedure Call Standard for the ARM   */	\
-	/* Architecture", the stack pointer is 4-byte aligned at all times, */	\
-	/* but it must be 8-byte aligned when calling an externally visible */	\
-	/* function. This is important because this code is reached from an */	\
-	/* IRQ and therefore the stack currently may only be 4-byte aligned.*/  \
-	/* If this is so, the stack must be padded to an 8-byte boundary	*/	\
-	/* before calling any external C code								*/	\
-	AND R4, SP, #0x3
-	SUB SP, SP, R4
+	STR	LR, [R0]										;@ Store new topOfStack value
 .endm
 
 ;@"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -489,10 +474,22 @@ swi_handler_stub:
 	/* Perform the context switch.  First save the context of the current task. */
 	portSAVE_CONTEXT
 
+	/* According to the document "Procedure Call Standard for the ARM   */	\
+	/* Architecture", the stack pointer is 4-byte aligned at all times, */	\
+	/* but it must be 8-byte aligned when calling an externally visible */	\
+	/* function. This is important because this code is reached from an */	\
+	/* IRQ and therefore the stack currently may only be 4-byte aligned.*/  \
+	/* If this is so, the stack must be padded to an 8-byte boundary	*/	\
+	/* before calling any external C code								*/	\
+	AND R4, SP, #0x7
+	SUB SP, SP, R4
+
 	/* Find the highest priority task that is ready to run. */
 	bl xSchedule
 
-
+	/* Restore the original stack alignment (see note about 8-byte alignment below).*/
+	ADD SP, SP, r4
+	
 	/* Restore the context of the new task. */
 	portRESTORE_CONTEXT
 	
@@ -506,7 +503,21 @@ irq_handler_stub:
 	/* Perform the context switch.  First save the context of the current task. */
 	portSAVE_CONTEXT
 	
+	/* According to the document "Procedure Call Standard for the ARM   */	\
+	/* Architecture", the stack pointer is 4-byte aligned at all times, */	\
+	/* but it must be 8-byte aligned when calling an externally visible */	\
+	/* function. This is important because this code is reached from an */	\
+	/* IRQ and therefore the stack currently may only be 4-byte aligned.*/  \
+	/* If this is so, the stack must be padded to an 8-byte boundary	*/	\
+	/* before calling any external C code								*/	\
+	AND R4, SP, #0x7
+	SUB SP, SP, R4
+
+	/* Call Tick ISR routine */
 	bl xTickISR
+
+	/* Restore the original stack alignment (see note about 8-byte alignment below).*/
+	ADD SP, SP, r4
 
 	/* Restore the context of the new task. */
 	portRESTORE_CONTEXT
@@ -517,13 +528,11 @@ irq_handler_stub:
 .weak fiq_handler_stub
 fiq_handler_stub:
     sub lr, lr, #4										;@ Use SRS to save LR_irq and SPSP_irq
-    srsfd sp!, #0x13									;@ on to the SVC mode stack
+	srsfd sp!, #0x11									;@ on to the FIQ mode stack
 
-    cps #0x13											;@ Switch to SVC mode
-    push {r0-r3, r12}									;@ Store AAPCS regs on to SVC stack
+    push {r0-r7}										;@ Only need R0-R7 on FIQ stack rest are banked
 
-    mov r1, sp
-    and r1, r1, #4										;@ Ensure 8-byte stack alignment
+    and r1, sp, #7										;@ Ensure 8-byte stack alignment
     sub sp, sp, r1										;@ adjust stack as necessary
     push {r1, lr}										;@ Store adjustment and LR_svc
 
@@ -537,8 +546,12 @@ no_fiqset:
     pop {r1, lr}										;@ Restore LR_svc
     add sp, sp, r1										;@ Un-adjust stack
 
-    pop {r0-r3, r12}									;@ Restore AAPCS registers
+    pop {r0-r7}											;@ Restore non banked FIQ registers
     rfefd sp!											;@ Return from the SVC mode stack
+	/* Should never get here */
+	b .
+.balign	4
+.ltorg													;@ Tell assembler ltorg data for this code can go here
 
 
 ;@"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -559,6 +572,7 @@ no_fiqset:
 EnableInterrupts:
 	cpsie i												;@ Enable IRQ
 	bx  lr												;@ Return
+.size	EnableInterrupts, .-EnableInterrupts
 
 ;@"========================================================================="
 @#		DisableInterrupts -- Composite Pi1, Pi2 & Pi3 code
@@ -573,6 +587,37 @@ EnableInterrupts:
 DisableInterrupts:
     cpsid i												;@ Disable IRQ
 	bx  lr												;@ Return
+.size	DisableInterrupts, .-DisableInterrupts
+
+;@"========================================================================="
+@#		EnableFIQ -- Composite Pi1, Pi2 & Pi3 code
+@#		C Function: void EnableFIQ ( void );
+@#		Entry: nothing
+@#		Return: nothing
+;@"========================================================================="
+.section .text.EnableFIQ, "ax", %progbits
+.balign	4
+.globl EnableFIQ
+.type EnableFIQ, %function
+EnableFIQ:
+	cpsie f												;@ Enable FIQ
+	bx  lr												;@ Return
+.size	EnableFIQ, .-EnableFIQ
+
+;@"========================================================================="
+@#		DisableFIQ -- Composite Pi1, Pi2 & Pi3 code
+@#		C Function: void DisableFIQ ( void );
+@#		Entry: nothing
+@#		Return: nothing
+;@"========================================================================="
+.section .text.DisableFIQ, "ax", %progbits
+.balign	4
+.globl DisableFIQ
+.type DisableFIQ, %function
+DisableFIQ:
+    cpsid f												;@ Disable FIQ
+	bx  lr												;@ Return
+.size	DisableFIQ, .-DisableFIQ
 
 ;@"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 @#		VC4 GPU ADDRESS HELPER ROUTINES PROVIDE BY RPi-SmartStart API	   
@@ -817,7 +862,7 @@ xStartFirstTask:
 taskInitialiseStack: 
     add r1, r1, #4				 //  Add +4 to pxcode address
 	str r1, [r0, #-4]!           //  (pxcode + 4)
-	ldr r3, =#0xaaaaaaaa          // This will be task terminate adderss down the track
+	ldr r3, =#0xaaaaaaaa          // This will be task terminate address down the track
 	str r1, [r0, #-4]!           //  r14  .. will be return address
     add r3, r0, #8		
 	str r3, [r0, #-4]!           //  r13  (original pxTopOfStack) 
@@ -853,6 +898,93 @@ taskInitialiseStack:
 .ltorg										// Tell assembler ltorg data for this code can go here
 .size	.taskInitialiseStack, .-taskInitialiseStack
 
+/* "PROVIDE C FUNCTION: void SwitchTasks (RegType_t oldTask, RegType_t newTask);" */
+.section .text.SwitchTasks, "ax", %progbits
+.balign	4
+.globl SwitchTasks;
+.type SwitchTasks, %function
+SwitchTasks:
+	/* Even though C called must mimic IRQ for compatability */
+	/* Push R0 as we are going to use the register. */
+	STMDB	SP!, {R0}
+
+	/* Set R0 to point to the task stack pointer. */
+	STMDB	SP,{SP}^		/* ^ means get the user mode SP value. */
+	SUB	SP, SP, #4
+	LDMIA	SP!,{R0}
+
+	/* Push the return address onto the stack. */
+	STMDB	R0!, {LR}
+
+	/* Now we have saved LR we can use it instead of R0. */
+	MOV	LR, R0
+
+	/* Pop R0 so we can save it onto the system mode stack. */
+	LDMIA	SP!, {R0}
+	LDR	R0, [R0]
+	LDR	R0, [R0]
+
+	/* Push all the system mode registers onto the task stack. */
+	STMDB	LR,{R0-LR}^
+	SUB	LR, LR, #60
+
+	/* Push the SPSR onto the task stack. */
+	MRS	R0, SPSR
+	STMDB	LR!, {R0}
+
+	/* Save FPU registers if task has FPU use flag set in pxflags */
+	LDR	R2, [R0, #4]									;@ load pxFlags
+	AND R2, #0x10										;@ Mask off all but FPU save flag
+    CMP R2, #0
+    BGE     1f	
+
+	//Save the Floating point registers D0 to D15 onto the old stack
+	fstmdbd LR!, {d0-d15}
+ 
+	//Save the Floating point FPSCR, FPEXC onto the old stack
+	fmrx r11, fpscr
+	fmrx r12, fpexc
+	STMDB	LR,{R11-R12}^
+
+1:
+	STR	LR, [R0]
+
+	LDR	R0, [R1]										;@ First item is pxCurrentTCB
+
+	/* Move the value of pxCurrentTCB into the Link Register! */
+	LDR	LR, [R0]
+
+	/* Restore FPU registers if task has FPU use flag set in pxflags */
+	LDR R0, [R0, #4]									;@ Fetch pxflags
+	AND R0, #0x10										;@ Clear all but FPU save flag
+    CMP R0, #0											;@ check if FPU save flag set
+    BGE  2f
+
+	LDMFD	LR, {R11-R12}^
+	//Restore the Floating point FPEXC from the new stack
+ 	fmxr fpexc, r12
+ 
+	 //Restore the Floating point FPSCR from the new stack
+	fmxr fpscr, r11
+  
+	//Restore the Floating point registers D0 to D15 from the new stack
+	fldmiad LR!, {d0-d15}
+
+2:
+	/* Get the SPSR from the stack. */
+	LDMFD	LR!, {R0}
+	MSR		SPSR_cxsf, R0
+
+	/* Restore all system mode registers for the task. */
+	LDMFD	LR, {R0-R14}^
+
+	/* Restore the return address. */
+	LDR		LR, [LR, #+60]
+
+	bx  lr												// Return
+.balign	4
+.ltorg										// Tell assembler ltorg data for this code can go here
+.size	.SwitchTasks, .-SwitchTasks
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			MMU HELPER ROUTINES PROVIDE BY RPi-SmartStart API			    }
@@ -909,48 +1041,53 @@ enable_mmu_tables:
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			SEMAPHORE ROUTINES PROVIDE BY RPi-SmartStart API			    }
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
 ;@"========================================================================="
-@#	semaphore_inc -- AARCH32 Pi1, Pi2, Pi3 code
-@#	C Function: "void semaphore_inc (uint32_t* sem);"
+@#	semaphore_take -- AARCH32 Pi1, Pi2, Pi3 code
+@#	C Function: "void semaphore_take (uint32_t* sem);"
 @#	Entry: R0 will have semaphore address value
 @#	Return: nothing
 ;@"========================================================================="
-.section .text.semaphore_inc, "ax", %progbits
+.section .text.semaphore_take, "ax", %progbits
 .balign	4
-.globl semaphore_inc;
-.type semaphore_inc, %function
-semaphore_inc:
+.globl semaphore_take;
+.type semaphore_take, %function
+semaphore_take:
+	mrs	r3, cpsr										;@ Fetch CPU PSTATE and hold
+    cpsid i												;@ Disable IRQ
+	cpsid f												;@ Disable FIQ
 	ldrex r1, [r0]
 	cmp r1, #0
-	bne semaphore_inc
+	bne semaphore_take
 	mov r2,  #1
-	strex r3, r2, [r0]
-	cmp r3, #0
-	bne semaphore_inc
+	strex r1, r2, [r0]
+	cmp r1, #0
+	bne semaphore_take
 	dmb
+	msr cpsr, r3										;@ Restore interrupt to whatever they were
     BX LR
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
-.size	semaphore_inc, .-semaphore_inc
+.size	semaphore_take, .-semaphore_take
 
 //"========================================================================="
-//	semaphore_dec -- Composite Pi1, Pi2 & Pi3 code
-//	C Function: "void semaphore_dec (uint32_t* sem);"
-//	Entry: X0 will have semaphore address value
+//	semaphore_give -- Composite Pi1, Pi2 & Pi3 code
+//	C Function: "void semaphore_give (uint32_t* sem);"
+//	Entry: R0 will have semaphore address value
 //	Return: nothing
 //"========================================================================="
-.section .text.semaphore_dec, "ax", %progbits
+.section .text.semaphore_give, "ax", %progbits
 .balign	4
-.globl semaphore_dec;
-.type semaphore_dec, %function
-semaphore_dec:
+.globl semaphore_give;
+.type semaphore_give, %function
+semaphore_give:
 	mov r1, #0
 	str r1, [r0]
 	dmb
     BX      lr
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
-.size	semaphore_dec, .-semaphore_dec
+.size	semaphore_give, .-semaphore_give
 
 ;@"*************************************************************************"
 @#          INTERNAL DATA FOR SMARTSTART NOT EXPOSED TO INTERFACE			

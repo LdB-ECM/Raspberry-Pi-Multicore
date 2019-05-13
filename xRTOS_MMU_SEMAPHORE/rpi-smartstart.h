@@ -410,18 +410,6 @@ void EnableFIQ(void);
 .--------------------------------------------------------------------------*/
 void DisableFIQ(void);
 
-/*-[getDAIF]----------------------------------------------------------------}
-. NOTE: Public C interface only to code located in SmartsStartxx.S
-. Return the DAIF flags for any CPU core calling this function.
-.--------------------------------------------------------------------------*/
-unsigned long getDAIF(void);
-
-/*-[setDAIF]----------------------------------------------------------------}
-. NOTE: Public C interface only to code located in SmartsStartxx.S
-. Sets the DAIF flags for any CPU core calling this function.
-.--------------------------------------------------------------------------*/
-void setDAIF (unsigned long flags);
-
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			 RPi-SmartStart API TO MULTICORE FUNCTIONS					    }
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -489,19 +477,26 @@ void xStartFirstTask (void);
 .--------------------------------------------------------------------------*/
 RegType_t* taskInitialiseStack (RegType_t* pxTopOfStack, void (*pxCode) (void* pvParameters), void* pvParameters);
 
+/*-[SwitchTasks]------------------------------------------------------------}
+. NOTE: Public C interface only to code located in SmartsStartxx.S
+. This is the manual C call to make a switch from an oldTask to a newTask
+. Both pointers are assumed to be the topofStack for each task
+.--------------------------------------------------------------------------*/
+void SwitchTasks(RegType_t oldTask, RegType_t newTask);
+
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			  SEMAPHORE ROUTINES PROVIDE BY RPi-SmartStart API			    }
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
-/*-[ semaphore_inc ]--------------------------------------------------------}
-.  Uses LDREX/STREX primitice to set a Binary Count Semaphore
+/*-[ semaphore_take ]-------------------------------------------------------}
+.  Uses LDREX/STREX primitive to "take" a Binary Semaphore
 .--------------------------------------------------------------------------*/
-void semaphore_inc (uint32_t* sem);
+void semaphore_take (uint32_t* sem);
 
-/*-[ semaphore_dec ]--------------------------------------------------------}
-.  Clears a Binary Count Semaphore
+/*-[ semaphore_give ]--------------------------------------------------------}
+.  Primitive to "give" a Binary Semaphore back
 .--------------------------------------------------------------------------*/
-void semaphore_dec (uint32_t* sem);
+void semaphore_give (uint32_t* sem);
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			MMU HELPER ROUTINES PROVIDE BY RPi-SmartStart API			    }
@@ -685,43 +680,6 @@ bool TimerIrqSetup (uint32_t period_in_us);							// Period between timer interr
 .--------------------------------------------------------------------------*/
 uintptr_t TimerFiqSetup (uint32_t period_in_us, 					// Period between timer interrupts in usec
 						 void (*ARMaddress)(void));					// Function to call (0 = ignored)
-
-
-/*==========================================================================}
-{  PUBLIC PI MULTICORE LOCAL TIMER ROUTINES PROVIDED BY RPi-SmartStart API	}
-{==========================================================================*/
-
-/*-[ClearLocalTimerIrq]-----------------------------------------------------}
-. Simply clear the local timer interupt by hitting the clear registers. Any
-. local timer irq/fiq interrupt function should call this before exiting.
-.--------------------------------------------------------------------------*/
-void ClearLocalTimerIrq (void);
-
-/*-[LocalTimerSetup]--------------------------------------------------------}
-. Sets the clock rate to the period in usec for the local clock timer.
-. Largest period is around 16 million usec (16 sec) it varies on core speed.
-. All cores share this clock so setting it from any core changes all cores.
-. RETURN: TRUE if successful,  FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerSetup (uint32_t period_in_us);						// Period between timer interrupts in usec
-
-/*-[LocalTimerIrqSetup]-----------------------------------------------------}
-. The local timer irq interrupt rate is set to the period in usec between
-. triggers. On BCM2835 (ARM6) it does not have core timer so call fails.
-. Largest period is around 16 million usec (16 sec) it varies on core speed
-. RETURN: TRUE if successful, FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerIrqSetup (uint32_t period_in_us,						// Period between timer interrupts in usec
-						 uint8_t coreNum);							// Core number
-
-/*-[LocalTimerFiqSetup]-----------------------------------------------------}
-. The local timer fiq interrupt rate is set to the period in usec between
-. triggers. On BCM2835 (ARM6) it does not have core timer so call fails.
-. Largest period is around 16 million usec (16 sec) it varies on core speed
-. RETURN: TRUE if successful, FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerFiqSetup (uint32_t period_in_us,						// Period between timer interrupts in usec
-						 uint8_t coreNum);							// Core number
 
 /*==========================================================================}
 {				           MINIUART ROUTINES								}

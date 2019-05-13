@@ -410,18 +410,6 @@ void EnableFIQ(void);
 .--------------------------------------------------------------------------*/
 void DisableFIQ(void);
 
-/*-[getDAIF]----------------------------------------------------------------}
-. NOTE: Public C interface only to code located in SmartsStartxx.S
-. Return the DAIF flags for any CPU core calling this function.
-.--------------------------------------------------------------------------*/
-unsigned long getDAIF(void);
-
-/*-[setDAIF]----------------------------------------------------------------}
-. NOTE: Public C interface only to code located in SmartsStartxx.S
-. Sets the DAIF flags for any CPU core calling this function.
-.--------------------------------------------------------------------------*/
-void setDAIF (unsigned long flags);
-
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			 RPi-SmartStart API TO MULTICORE FUNCTIONS					    }
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -489,19 +477,26 @@ void xStartFirstTask (void);
 .--------------------------------------------------------------------------*/
 RegType_t* taskInitialiseStack (RegType_t* pxTopOfStack, void (*pxCode) (void* pvParameters), void* pvParameters);
 
+/*-[SwitchTasks]------------------------------------------------------------}
+. NOTE: Public C interface only to code located in SmartsStartxx.S
+. This is the manual C call to make a switch from an oldTask to a newTask
+. Both pointers are assumed to be the topofStack for each task
+.--------------------------------------------------------------------------*/
+void SwitchTasks(RegType_t oldTask, RegType_t newTask);
+
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			  SEMAPHORE ROUTINES PROVIDE BY RPi-SmartStart API			    }
 {++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
-/*-[ semaphore_inc ]--------------------------------------------------------}
-.  Uses LDREX/STREX primitice to set a Binary Count Semaphore
+/*-[ semaphore_take ]-------------------------------------------------------}
+.  Uses LDREX/STREX primitive to "take" a Binary Semaphore
 .--------------------------------------------------------------------------*/
-void semaphore_inc (uint32_t* sem);
+void semaphore_take (uint32_t* sem);
 
-/*-[ semaphore_dec ]--------------------------------------------------------}
-.  Clears a Binary Count Semaphore
+/*-[ semaphore_give ]--------------------------------------------------------}
+.  Primitive to "give" a Binary Semaphore back
 .--------------------------------------------------------------------------*/
-void semaphore_dec (uint32_t* sem);
+void semaphore_give (uint32_t* sem);
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
 {			MMU HELPER ROUTINES PROVIDE BY RPi-SmartStart API			    }

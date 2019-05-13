@@ -41,7 +41,7 @@ void xSemaphoreTake (SemaphoreHandle_t sem)
 {
 	if (sem && sem->inUse)
 	{
-		semaphore_inc(&sem->count);
+		semaphore_take(&sem->count);
 	}
 }
 
@@ -52,6 +52,6 @@ void xSemaphoreGive (SemaphoreHandle_t sem)
 {
 	if (sem && sem->inUse)
 	{
-		semaphore_dec(&sem->count);
+		semaphore_give(&sem->count);
 	}
 }
