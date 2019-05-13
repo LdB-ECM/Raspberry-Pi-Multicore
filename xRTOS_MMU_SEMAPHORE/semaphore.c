@@ -3,7 +3,7 @@
 #include "rpi-SmartStart.h"
 #include "semaphore.h"
 
-#define MAX_SEMAPHORE  50
+#define MAX_SEMAPHORE  100
 
 struct __attribute__((__packed__, aligned(4))) Semaphore_t 
 {

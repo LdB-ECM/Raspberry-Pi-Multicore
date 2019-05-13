@@ -59,10 +59,8 @@ typedef struct TaskControlBlock
 																	It changes each task switch and the optimizer needs to know that */
 	struct pxTaskFlags_t {
 		volatile RegType_t	uxCriticalNesting : 8;				/*< Holds the critical section nesting depth */
-		RegType_t			_reserved : sizeof(RegType_t) * 8 - 11;
-		volatile RegType_t	ucDelayAborted : 1;					/*< Set to 1 if the task delay is aborted */
-		volatile RegType_t	ucStaticallyAllocated : 1;			/*< Set to 1 if the task is a statically allocated to ensure no attempt is made to free the memory. */
 		volatile RegType_t	uxTaskUsesFPU : 1;					/*< If task uses FPU this flag will be set to 1 and FPU registers save on context switch */
+		RegType_t			_reserved : (sizeof(RegType_t) * 8) - 9;
 	}	pxTaskFlags;											/*< Task flags ... these flags will be save FPU, nested count etc in future
 																	THIS MUST BE THE SECOND MEMBER OF THE TCB STRUCT AND MUST BE VOLATILE.
 																	It changes each task switch and the optimizer needs to know that */
@@ -74,10 +72,13 @@ typedef struct TaskControlBlock
 	struct TaskControlBlock* prev;								/*< Prev task in list */
 	RegType_t ReleaseTime;										/*< Core OSTickCounter at which task will be released from delay ... only valid if task in delayed list */
 	RegType_t waitMessageID;									/*< When in the wait on message list this is the unique message ID that will release it */
+
+	SemaphoreHandle_t taskSem;									/*< Task semaphore */
+
 	struct {
 		RegType_t		uxPriority : 8;							/*< The priority of the task.  0 is the lowest priority. */
 		RegType_t		taskState : 8;							/*< Task state running, delayed, blocked etc */
-		RegType_t		_reserved : sizeof(RegType_t)*8 - 20;
+		RegType_t		_reserved : (sizeof(RegType_t)*8) - 20;
 		RegType_t		assignedCore : 3;						/*< Core this task is assigned to on a multicore, always 0 on single core */
 		RegType_t		inUse : 1;								/*< This task is in use field */
 	};
@@ -122,7 +123,6 @@ static SemaphoreHandle_t mailbox0_semaphore[4] = { 0 };				// Mailbox semaphore 
 static RegType_t TestStack[16384] __attribute__((aligned(16)));
 static RegType_t* TestStackTop = &TestStack[16384];
 
-RegType_t ulCriticalNesting = 0;
 static uint64_t m_nClockTicksPerHZTick = 0;							// Divisor to generat tick frequency
 
 /***************************************************************************}
@@ -308,13 +308,13 @@ void xTaskDelay (const unsigned int time_wait)
 		struct TaskControlBlock* task;
 		unsigned int corenum = getCoreID();							// Get the core ID
 		struct CoreControlBlock* cb = &coreCB[corenum];				// Set pointer to core block
-		CoreEnterCritical();										// Entering core critical area
-		task = (struct TaskControlBlock*) cb->pxCurrentTCB;			// Set temp task pointer .. typecast is to stop volatile dropped warning						
+		task = (struct TaskControlBlock*) cb->pxCurrentTCB;			// Set temp task pointer .. typecast is to stop volatile dropped warning
+		xSemaphoreTake(task->taskSem);								// We are going to play with list lock the task semaphore
 		task->ReleaseTime = cb->OSTickCounter + time_wait;			// Calculate release tick value
 		RemoveTaskFromList(&cb->readyTasks, task);					// Remove task from ready list
 		task->taskState = tskBLOCKED_CHAR;							// Change task state to blocked
 		AddTaskToList(&cb->delayedTasks, task);						// Add the task to delay list
-		CoreExitCritical();											// Exiting core critical area
+		xSemaphoreGive(task->taskSem);								// Okay clear to release task semaphore
 		ImmediateYield;												// Immediate yield ... store task context, reschedule new current task and switch to it
 	}
 }
@@ -332,13 +332,13 @@ void xTaskWaitOnMessage (const RegType_t userMessageID)
 		struct TaskControlBlock* task;
 		unsigned int corenum = getCoreID();							// Get the core ID
 		struct CoreControlBlock* cb = &coreCB[corenum];				// Set pointer to core block
-		CoreEnterCritical();										// Entering core critical area
-		task = (struct TaskControlBlock*) cb->pxCurrentTCB;			// Set temp task pointer .. typecast is to stop volatile dropped warning							
+		task = (struct TaskControlBlock*) cb->pxCurrentTCB;			// Set temp task pointer .. typecast is to stop volatile dropped warning
+		xSemaphoreTake(task->taskSem);								// We are going to play with list lock the task semaphore
 		RemoveTaskFromList(&cb->readyTasks, task);					// Remove task from ready list
 		task->waitMessageID = userMessageID;						// Set wait on message ID
 		task->taskState = tskBLOCKED_CHAR;							// Change task state to blocked
 		AddTaskToList(&cb->waitMsgTasks, task);						// Add the task to wait message task list
-		CoreExitCritical();											// Exiting core critical area
+		xSemaphoreGive(task->taskSem);								// Okay clear to release task semaphore
 		ImmediateYield;												// Immediate yield ... store task context, reschedule new current task and switch to it
 	}
 }
@@ -353,33 +353,10 @@ void xTaskReleaseMessage (const RegType_t userMessageID)
 {
 	if (userMessageID)												// Non zero user Message ID must be used
 	{
-		struct TaskControlBlock* task;
-		unsigned int corenum = getCoreID();							// Get the core ID
-		struct CoreControlBlock* cb = &coreCB[corenum];				// Set pointer to core block
-		/* Check current core */
-		task = cb->waitMsgTasks.head;								// Set task to wait for message head
-		while (task != 0)
-		{
-			if (userMessageID == task->waitMessageID)				// Check if message matches
-			{
-				RemoveTaskFromList(&cb->waitMsgTasks, task);		// Remove the task from wait for messsage list
-				task->taskState = tskREADY_CHAR;					// Set the read char state
-				AddTaskToList(&cb->readyTasks, task);				// Add the task to the ready list
-				return;												// Only one task release per message
-			}
-			task = task->next;										// Next message task
-		}
-		/* Check previous cores for message release because not on current core */
-		for (int i = 0; i < corenum; i++)
+		for (int i = 0; i < MAX_CPU_CORES; i++)
 		{	
-			xSemaphoreTake(mailbox0_semaphore[i]);
-			SendCoreMessage(userMessageID, i, 0);
-		}
-		/* Check later cores for message release because not on current core */
-		for (int i = corenum + 1; i < MAX_CPU_CORES; i++)
-		{
-			xSemaphoreTake(mailbox0_semaphore[i]);
-			SendCoreMessage(userMessageID, i, 0);
+			xSemaphoreTake(mailbox0_semaphore[i]);					// Lock the maolbox0 semaphore for core
+			SendCoreMessage(userMessageID, i, 0);					// Issue message to release task
 		}
 	}
 }

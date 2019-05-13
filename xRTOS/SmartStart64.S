@@ -325,6 +325,8 @@ StartSecondarySpin:
 	/* Now save the new SP value as core RPi_CurrentTaskStackTop */
 	MOV 	X0, SP   /* Move SP into X0 for saving. */
 	STR 	X0, [X1]
+
+	CLREX
 .endm
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++}
@@ -390,6 +392,8 @@ StartSecondarySpin:
 	LDP 	X4, X5, [SP], #0x10
 	LDP 	X2, X3, [SP], #0x10
 	LDP 	X0, X1, [SP], #0x10
+
+	CLREX
 
 	ERET
 .endm
@@ -869,6 +873,7 @@ taskInitialiseStack:
 .type SwitchTasks, %function
 SwitchTasks:
 	/* Even though C called must mimic IRQ for compatability */
+
 	STP 	X0, X1, [SP, #-0x10]!
 	STP 	X2, X3, [SP, #-0x10]!
 	STP 	X4, X5, [SP, #-0x10]!
@@ -965,6 +970,9 @@ SwitchTasks:
 	LDP 	X4, X5, [SP], #0x10
 	LDP 	X2, X3, [SP], #0x10
 	LDP 	X0, X1, [SP], #0x10
+
+	CLREX
+
 	RET
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
@@ -1056,12 +1064,12 @@ enable_mmu_tables:
 semaphore_take:
 	mrs		X4, daif				// Hold DAIF flags
 	msr		daifset, #2				// Disable Irq
-	msr		daifset, #1				// Disable Fiq
-    mov		w2, 1
+    mov		w2, #1
+semaphore_take_loop:
     ldaxr   w1, [x0]
     stxr    w3, w2, [x0]
-    cbnz    w3, semaphore_take
-    cbnz    w1, semaphore_take
+    cbnz    w3, semaphore_take_loop
+	cbnz    w1, semaphore_take_loop
 	dmb ish
 	msr daif, X4					// Restore DAIF flags to whatever they were
     ret

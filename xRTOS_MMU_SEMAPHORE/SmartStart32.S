@@ -404,6 +404,8 @@ atags:  .4byte 0x100
 	/* And return - correcting the offset in the LR to obtain the */
 	/* correct address. */
 	SUBS	PC, LR, #4
+
+	CLREX
 .endm
 
 .macro portSAVE_CONTEXT
@@ -458,6 +460,8 @@ atags:  .4byte 0x100
 
 1:
 	STR	LR, [R0]										;@ Store new topOfStack value
+
+	CLREX
 .endm
 
 ;@"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -835,16 +839,8 @@ EL0_Timer_Irq_Setup:
 .globl xStartFirstTask
 .type xStartFirstTask, %function
 xStartFirstTask:
-	mrs r0, cpsr							// Read in the cpsr register.
-	bic	r0, r0, #0x80						// Clear bit 8, (0x80) -- Causes IRQs to be enabled
-	msr cpsr_c, r0							// Write it back to the CPSR register
-
 	/* Restore the first task starting the system */
 	portRESTORE_CONTEXT
-
-	LDMFD	SP!, {LR}
-	SUB	LR,	LR, #4
-
 	bx  lr									// Return
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
@@ -1055,15 +1051,15 @@ enable_mmu_tables:
 semaphore_take:
 	mrs	r3, cpsr										;@ Fetch CPU PSTATE and hold
     cpsid i												;@ Disable IRQ
-	cpsid f												;@ Disable FIQ
+	mov r2,  #1
+semaphore_take_loop:
 	ldrex r1, [r0]
 	cmp r1, #0
-	bne semaphore_take
-	mov r2,  #1
+	bne semaphore_take_loop
 	strex r1, r2, [r0]
 	cmp r1, #0
-	bne semaphore_take
-	dmb
+	bne semaphore_take_loop
+	dmb ish
 	msr cpsr, r3										;@ Restore interrupt to whatever they were
     BX LR
 .balign	4
@@ -1083,7 +1079,7 @@ semaphore_take:
 semaphore_give:
 	mov r1, #0
 	str r1, [r0]
-	dmb
+	dmb ish
     BX      lr
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here

@@ -2,6 +2,7 @@
 #include "xRTOS.h"
 #include "rpi-smartstart.h"
 #include "mmu.h"
+#include "semaphore.h"
 #include "task.h"
 
 /*
@@ -55,12 +56,10 @@ typedef struct TaskControlBlock
 	volatile RegType_t	*pxTopOfStack;							/*< Points to the location of the last item placed on the tasks stack.
 																	THIS MUST BE THE FIRST MEMBER OF THE TCB STRUCT AND MUST BE VOLATILE.
 																	It changes each task switch and the optimizer needs to know that */
-	struct {
+	struct pxTaskFlags_t {
 		volatile RegType_t	uxCriticalNesting : 8;				/*< Holds the critical section nesting depth */
-		RegType_t			_reserved : sizeof(RegType_t) * 8 - 11;
-		volatile RegType_t	ucDelayAborted : 1;					/*< Set to 1 if the task delay is aborted */
-		volatile RegType_t	ucStaticallyAllocated : 1;			/*< Set to 1 if the task is a statically allocated to ensure no attempt is made to free the memory. */
 		volatile RegType_t	uxTaskUsesFPU : 1;					/*< If task uses FPU this flag will be set to 1 and FPU registers save on context switch */
+		RegType_t			_reserved : (sizeof(RegType_t) * 8) - 9;
 	}	pxTaskFlags;											/*< Task flags ... these flags will be save FPU, nested count etc in future
 																	THIS MUST BE THE SECOND MEMBER OF THE TCB STRUCT AND MUST BE VOLATILE.
 																	It changes each task switch and the optimizer needs to know that */
@@ -73,10 +72,12 @@ typedef struct TaskControlBlock
 	/* If task is in the delayed list this is release time */
 	RegType_t ReleaseTime;										/*< Core OSTickCounter at which task will be released from delay */
 
+	SemaphoreHandle_t taskSem;									/*< Task semaphore */	
+
 	struct {
 		RegType_t		uxPriority : 8;							/*< The priority of the task.  0 is the lowest priority. */
 		RegType_t		taskState : 8;							/*< Task state running, delayed, blocked etc */
-		RegType_t		_reserved : sizeof(RegType_t)*8 - 20;
+		RegType_t		_reserved : (sizeof(RegType_t)*8) - 20;
 		RegType_t		assignedCore : 3;						/*< Core this task is assigned to on a multicore, always 0 on single core */
 		RegType_t		inUse : 1;								/*< This task is in use field */
 	};
@@ -119,7 +120,6 @@ static struct CoreControlBlock
 static RegType_t TestStack[16384] __attribute__((aligned(16)));
 static RegType_t* TestStackTop = &TestStack[16384];
 
-RegType_t ulCriticalNesting = 0;
 static uint64_t m_nClockTicksPerHZTick = 0;							// Divisor to generat tick frequency
 
 /***************************************************************************}
@@ -202,8 +202,6 @@ static void StartTasksOnCore(void)
 	MMU_enable();													// Enable MMU											
 	EL0_Timer_Set(m_nClockTicksPerHZTick);							// Set the EL0 timer
 	EL0_Timer_Irq_Setup();											// Setup the EL0 timer interrupt
-
-	EnableInterrupts();												// Enable interrupts on core
 	xStartFirstTask();												// Restore context starting the first task
 }
 
@@ -245,11 +243,12 @@ void xTaskCreate (uint8_t corenum,									// The core number to run task on
 		task = &cb->coreTCB[i];										// This is the task we are talking about
 		task->pxStack = TestStackTop;								// Hold the top of task stack
 		task->pxTopOfStack = taskInitialiseStack(TestStackTop, pxTaskCode, pvParameters);
-		//task->pxTaskFlags = 0;										// Make sure the task flags are clear
+		task->pxTaskFlags = (struct pxTaskFlags_t){ 0 };			// Make sure the task flags are clear
 		TestStackTop -= usStackDepth;
 		task->uxPriority = uxPriority;								// Hold the task priority
 		task->inUse = 1;											// Set the task is in use flag
 		task->assignedCore = corenum;								// Hold the core number task assigned to 
+		task->taskSem = xSemaphoreCreateBinary();					// Create a semaphore
 		if (pcName) {
 			int j;
 			for (j = 0; (j < configMAX_TASK_NAME_LEN - 1) && (pcName[j] != 0); j++)
@@ -277,13 +276,13 @@ void xTaskDelay (const unsigned int time_wait)
 		struct TaskControlBlock* task;
 		unsigned int corenum = getCoreID();							// Get the core ID
 		struct CoreControlBlock* cb = &coreCB[corenum];				// Set pointer to core block
-		CoreEnterCritical();										// Entering core critical area
 		task = (struct TaskControlBlock*) cb->pxCurrentTCB;			// Set temp task pointer .. typecast is to stop volatile dropped warning						
+		xSemaphoreTake(task->taskSem);								// We are going to play with list lock the task semaphore
 		task->ReleaseTime = cb->OSTickCounter + time_wait;			// Calculate release tick value
 		RemoveTaskFromList(&cb->readyTasks, task);					// Remove task from ready list
 		task->taskState = tskBLOCKED_CHAR;							// Change task state to blocked
 		AddTaskToList(&cb->delayedTasks, task);						// Add the task to delay list
-		CoreExitCritical();											// Exiting core critical area
+		xSemaphoreGive(task->taskSem);								// Okay clear to release task semaphore
 		ImmediateYield;												// Immediate yield ... store task context, reschedule new current task and switch to it
 	}
 }
