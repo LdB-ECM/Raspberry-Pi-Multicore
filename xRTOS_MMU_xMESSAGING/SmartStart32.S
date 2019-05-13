@@ -517,13 +517,12 @@ irq_handler_stub:
 .weak fiq_handler_stub
 fiq_handler_stub:
     sub lr, lr, #4										;@ Use SRS to save LR_irq and SPSP_irq
-    srsfd sp!, #0x13									;@ on to the SVC mode stack
+	srsfd sp!, #0x11									;@ on to the FIQ mode stack
 
-    cps #0x13											;@ Switch to SVC mode
-    push {r0-r3, r12}									;@ Store AAPCS regs on to SVC stack
+    push {r0-r7}										;@ Only need R0-R7 on FIQ stack rest are banked
 
-    mov r1, sp
-    and r1, r1, #4										;@ Ensure 8-byte stack alignment
+    mov r1, sp											;@ Fetch Stack Pointer
+    and r1, r1, #7										;@ Ensure 8-byte stack alignment
     sub sp, sp, r1										;@ adjust stack as necessary
     push {r1, lr}										;@ Store adjustment and LR_svc
 
@@ -537,7 +536,7 @@ no_fiqset:
     pop {r1, lr}										;@ Restore LR_svc
     add sp, sp, r1										;@ Un-adjust stack
 
-    pop {r0-r3, r12}									;@ Restore AAPCS registers
+    pop {r0-r7}											;@ Restore non banked FIQ registers
     rfefd sp!											;@ Return from the SVC mode stack
 
 

@@ -1,7 +1,9 @@
 #include <stdint.h>
 #include "xRTOS.h"
 #include "rpi-smartstart.h"
+#include "QA7.h"
 #include "mmu.h"
+#include "semaphore.h"
 #include "task.h"
 
 /*
@@ -55,7 +57,7 @@ typedef struct TaskControlBlock
 	volatile RegType_t	*pxTopOfStack;							/*< Points to the location of the last item placed on the tasks stack.
 																	THIS MUST BE THE FIRST MEMBER OF THE TCB STRUCT AND MUST BE VOLATILE.
 																	It changes each task switch and the optimizer needs to know that */
-	struct {
+	struct pxTaskFlags_t {
 		volatile RegType_t	uxCriticalNesting : 8;				/*< Holds the critical section nesting depth */
 		RegType_t			_reserved : sizeof(RegType_t) * 8 - 11;
 		volatile RegType_t	ucDelayAborted : 1;					/*< Set to 1 if the task delay is aborted */
@@ -115,6 +117,7 @@ static struct CoreControlBlock
 /***************************************************************************}
 {					   PRIVATE INTERNAL DATA STORAGE					    }
 ****************************************************************************/
+static SemaphoreHandle_t mailbox0_semaphore[4] = { 0 };				// Mailbox semaphore for each core mailbox 0
 
 static RegType_t TestStack[16384] __attribute__((aligned(16)));
 static RegType_t* TestStackTop = &TestStack[16384];
@@ -195,6 +198,35 @@ static void prvIdleTask(void* pvParameters)
 }
 
 /*--------------------------------------------------------------------------}
+{		Each core will call this FIQ handler for a mailbox message			}
+{--------------------------------------------------------------------------*/
+void coreFIQHandler (void)
+{
+	uint32_t msgId;
+	unsigned int corenum = getCoreID();								// Get the core ID
+	if (ReadCoreMessage(&msgId, corenum, 0))						// Read the message
+	{
+		struct TaskControlBlock* task;
+		struct CoreControlBlock* cb = &coreCB[corenum];				// Set pointer to core block
+		/* Check current core */
+		task = cb->waitMsgTasks.head;								// Set task to wait for message head
+		while (task != 0)
+		{
+			if (msgId == task->waitMessageID)						// Check if message matches
+			{
+				RemoveTaskFromList(&cb->waitMsgTasks, task);		// Remove the task from wait for messsage list
+				task->taskState = tskREADY_CHAR;					// Set the read char state
+				AddTaskToList(&cb->readyTasks, task);				// Add the task to the ready list
+				xSemaphoreGive(mailbox0_semaphore[corenum]);		// Give the semaphore back before return
+				return;												// Only one task release per message
+			}
+			task = task->next;										// Next message task
+		}
+	}
+	xSemaphoreGive(mailbox0_semaphore[corenum]);					// Message no on this core give semaphore back
+}
+
+/*--------------------------------------------------------------------------}
 {			Starts the tasks running on the core just as it says			}
 {--------------------------------------------------------------------------*/
 static void StartTasksOnCore(void)
@@ -202,8 +234,6 @@ static void StartTasksOnCore(void)
 	MMU_enable();													// Enable MMU											
 	EL0_Timer_Set(m_nClockTicksPerHZTick);							// Set the EL0 timer
 	EL0_Timer_Irq_Setup();											// Setup the EL0 timer interrupt
-
-	EnableInterrupts();												// Enable interrupts on core
 	xStartFirstTask();												// Restore context starting the first task
 }
 
@@ -220,6 +250,7 @@ void xRTOS_Init (void)
 	{
 		RPi_coreCB_PTR[i] = &coreCB[i];								// Set the core block pointers in the smartstart system needed by irq and swi vectors
 		coreCB[i].xCoreBlockInitialized = 1;						// Set the core block initialzied flag to state this has been done
+		mailbox0_semaphore[i] = xSemaphoreCreateBinary();			// Create core mailbox 0 semaphore
 	}
 }
 
@@ -245,8 +276,8 @@ void xTaskCreate (uint8_t corenum,									// The core number to run task on
 		task = &cb->coreTCB[i];										// This is the task we are talking about
 		task->pxStack = TestStackTop;								// Hold the top of task stack
 		task->pxTopOfStack = taskInitialiseStack(TestStackTop, pxTaskCode, pvParameters);
-		//task->pxTaskFlags = 0;										// Make sure the task flags are clear
-		TestStackTop -= usStackDepth;
+		task->pxTaskFlags = (struct pxTaskFlags_t){ 0 };			// Make sure the task flags are clear
+		TestStackTop -= usStackDepth;								// Set stack size
 		task->uxPriority = uxPriority;								// Hold the task priority
 		task->inUse = 1;											// Set the task is in use flag
 		task->assignedCore = corenum;								// Hold the core number task assigned to 
@@ -338,40 +369,17 @@ void xTaskReleaseMessage (const RegType_t userMessageID)
 			}
 			task = task->next;										// Next message task
 		}
-
-		/* Check previous cores */
+		/* Check previous cores for message release because not on current core */
 		for (int i = 0; i < corenum; i++)
-		{
-			cb = &coreCB[i];										// Set pointer to core block
-			task = cb->waitMsgTasks.head;							// Set task to wait for message head
-			while (task != 0)
-			{
-				if (userMessageID == task->waitMessageID)			// Check if message matches
-				{
-					RemoveTaskFromList(&cb->waitMsgTasks, task);	// Remove the task from wait for messsage list
-					task->taskState = tskREADY_CHAR;				// Set the read char state
-					AddTaskToList(&cb->readyTasks, task);			// Add the task to the ready list
-					return;											// Only one task release per message
-				}
-				task = task->next;									// Next message task
-			}
+		{	
+			xSemaphoreTake(mailbox0_semaphore[i]);
+			SendCoreMessage(userMessageID, i, 0);
 		}
-		/* Check later cores */
+		/* Check later cores for message release because not on current core */
 		for (int i = corenum + 1; i < MAX_CPU_CORES; i++)
 		{
-			cb = &coreCB[i];										// Set pointer to core block
-			task = cb->waitMsgTasks.head;							// Set task to wait for message head
-			while (task != 0)
-			{
-				if (userMessageID == task->waitMessageID)			// Check if message matches
-				{
-					RemoveTaskFromList(&cb->waitMsgTasks, task);	// Remove the task from wait for messsage list
-					task->taskState = tskREADY_CHAR;				// Set the read char state
-					AddTaskToList(&cb->readyTasks, task);			// Add the task to the ready list
-					return;											// Only one task release per message
-				}
-				task = task->next;									// Next message task
-			}
+			xSemaphoreTake(mailbox0_semaphore[i]);
+			SendCoreMessage(userMessageID, i, 0);
 		}
 	}
 }
@@ -394,6 +402,12 @@ void xTaskStartScheduler( void )
 
 	/* MMU table setup done by core 0 */
 	MMU_setup_pagetable();
+
+	/* Set each CORE FIQ to the basic mailbox handler */
+	CoreMailboxFiqSetup(coreFIQHandler, 0, 0);
+	CoreMailboxFiqSetup(coreFIQHandler, 1, 0);
+	CoreMailboxFiqSetup(coreFIQHandler, 2, 0);
+	CoreMailboxFiqSetup(coreFIQHandler, 3, 0);
 
 	/* Start each core in reverse order because core0 is running this code  */
 	CoreExecute(3, StartTasksOnCore);								// Start tasks on core3

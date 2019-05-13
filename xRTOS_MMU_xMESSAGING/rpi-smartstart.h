@@ -686,43 +686,6 @@ bool TimerIrqSetup (uint32_t period_in_us);							// Period between timer interr
 uintptr_t TimerFiqSetup (uint32_t period_in_us, 					// Period between timer interrupts in usec
 						 void (*ARMaddress)(void));					// Function to call (0 = ignored)
 
-
-/*==========================================================================}
-{  PUBLIC PI MULTICORE LOCAL TIMER ROUTINES PROVIDED BY RPi-SmartStart API	}
-{==========================================================================*/
-
-/*-[ClearLocalTimerIrq]-----------------------------------------------------}
-. Simply clear the local timer interupt by hitting the clear registers. Any
-. local timer irq/fiq interrupt function should call this before exiting.
-.--------------------------------------------------------------------------*/
-void ClearLocalTimerIrq (void);
-
-/*-[LocalTimerSetup]--------------------------------------------------------}
-. Sets the clock rate to the period in usec for the local clock timer.
-. Largest period is around 16 million usec (16 sec) it varies on core speed.
-. All cores share this clock so setting it from any core changes all cores.
-. RETURN: TRUE if successful,  FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerSetup (uint32_t period_in_us);						// Period between timer interrupts in usec
-
-/*-[LocalTimerIrqSetup]-----------------------------------------------------}
-. The local timer irq interrupt rate is set to the period in usec between
-. triggers. On BCM2835 (ARM6) it does not have core timer so call fails.
-. Largest period is around 16 million usec (16 sec) it varies on core speed
-. RETURN: TRUE if successful, FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerIrqSetup (uint32_t period_in_us,						// Period between timer interrupts in usec
-						 uint8_t coreNum);							// Core number
-
-/*-[LocalTimerFiqSetup]-----------------------------------------------------}
-. The local timer fiq interrupt rate is set to the period in usec between
-. triggers. On BCM2835 (ARM6) it does not have core timer so call fails.
-. Largest period is around 16 million usec (16 sec) it varies on core speed
-. RETURN: TRUE if successful, FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerFiqSetup (uint32_t period_in_us,						// Period between timer interrupts in usec
-						 uint8_t coreNum);							// Core number
-
 /*==========================================================================}
 {				           MINIUART ROUTINES								}
 {==========================================================================*/

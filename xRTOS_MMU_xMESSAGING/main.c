@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "rpi-smartstart.h"
+#include "QA7.h"
 #include "emb-stdio.h"
 #include "xRTOS.h"
 #include "task.h"
@@ -24,7 +25,6 @@ void DoProgress(HDC dc, int step, int total, int x, int y, int barWth, int barHt
 	SetDCBrushColor(dc, orgBrush);
 
 }
-
 
 static SemaphoreHandle_t screenSem;
 static unsigned int Counts[4] = { 0 };
@@ -212,7 +212,8 @@ void main (void)
 	displaySmartStart(printf);										// Display smart start details
 	ARM_setmaxspeed(printf);										// ARM CPU to max speed
 	printf("Task tick rate: %u\n", configTICK_RATE_HZ);
-	
+
+
 	xRTOS_Init();													// Initialize the xRTOS system .. done before any other xRTOS call
 
 	screenSem = xSemaphoreCreateBinary();

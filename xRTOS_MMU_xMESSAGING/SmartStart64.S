@@ -447,22 +447,34 @@ irq_handler_stub:
 /* So we will need to save registers x0-x7, x8-x15, x16-x18, x29, x30, 				 */
 .weak fiq_handler_stub
 fiq_handler_stub:	
-	stp	x29, x30, [sp, #-16]!							// Store frame pointer and Link register
-	stp	x18, x19,  [sp, #-16]!							// Save register x18, as C will trash it.. 19 just there as a pair
-	stp	x16, x17,  [sp, #-16]!							// Save register x16, x17 as C will trash them
-	stp	x14, x15,  [sp, #-16]!							// Save register x14, x15 as C will trash them
-	stp	x12, x13,  [sp, #-16]!							// Save register x12, x13 as C will trash them
-	stp	x10, x11,  [sp, #-16]!							// Save register x10, x11 as C will trash them
-	stp	x8, x9,  [sp, #-16]!							// Save register x8, x9 as C will trash them
-	stp	x6, x7,  [sp, #-16]!							// Save register x6, x7 as C will trash them
-	stp	x4, x5,  [sp, #-16]!							// Save register x4, x5 as C will trash them
-	stp	x2, x3,  [sp, #-16]!							// Save register x2, x3 as C will trash them
-	stp	x0, x1,  [sp, #-16]!							// Save register x0, x1 as C will trash them
+	/* Save the entire registers */
+	STP 	X0, X1, [SP, #-0x10]!
+	STP 	X2, X3, [SP, #-0x10]!
+	STP 	X4, X5, [SP, #-0x10]!
+	STP 	X6, X7, [SP, #-0x10]!
+	STP 	X8, X9, [SP, #-0x10]!
+	STP 	X10, X11, [SP, #-0x10]!
+	STP 	X12, X13, [SP, #-0x10]!
+	STP 	X14, X15, [SP, #-0x10]!
+	STP 	X16, X17, [SP, #-0x10]!
+	STP 	X18, X19, [SP, #-0x10]!
+	STP 	X20, X21, [SP, #-0x10]!
+	STP 	X22, X23, [SP, #-0x10]!
+	STP 	X24, X25, [SP, #-0x10]!
+	STP 	X26, X27, [SP, #-0x10]!
+	STP 	X28, X29, [SP, #-0x10]!
+	STP 	X30, XZR, [SP, #-0x10]!
+
+	/* Save the SPSR. */
+	MRS		X3, SPSR_EL1
+	MRS		X2, ELR_EL1
+	STP 	X2, X3, [SP, #-0x10]!
 
 	mov x1, sp
     and x1, x1, #0xF									// Ensure 16-byte stack alignment
     sub sp, sp, x1										// adjust stack as necessary
     stp	x1, xzr, [sp, #-16]!							// Store adjustment
+
 
 	ldr x0, =RPi_FiqFuncAddr							// Address to FiqFuncAddr
 	ldr x0, [x0]										// Load FiqFuncAddr value
@@ -473,18 +485,31 @@ no_fiqset:
 	ldp	x1, xzr,  [sp], #16								// Reload adjustment
     add sp, sp, x1										// Un-adjust stack
 
-	ldp	x0, x1,  [sp], #16								// Restore register x0, x1
-	ldp	x2, x3,  [sp], #16								// Restore register x2, x3
-	ldp	x4, x5,  [sp], #16								// Restore register x4, x5
-	ldp	x6, x7,  [sp], #16								// Restore register x6, x7
-	ldp	x8, x9,  [sp], #16								// Restore register x8, x9
-	ldp	x10, x11,  [sp], #16							// Restore register x10, x11
-	ldp	x12, x13,  [sp], #16							// Restore register x12, x13
-	ldp	x14, x15,  [sp], #16							// Restore register x14, x15
-	ldp	x16, x17,  [sp], #16							// Restore register x16, x17
-	ldp	x18, x19,  [sp], #16							// Restore register x18, x19 
-    ldp x29, x30, [sp], #16								// Restore frame pointer and Link register
-	eret
+	LDP 	X2, X3, [SP], #0x10  /* SPSR and ELR. */
+
+	/* Restore the SPSR. */
+	MSR		SPSR_EL1, X3
+	/* Restore the ELR. */
+	MSR		ELR_EL1, X2
+
+	LDP 	X30, XZR, [SP], #0x10
+	LDP 	X28, X29, [SP], #0x10
+	LDP 	X26, X27, [SP], #0x10
+	LDP 	X24, X25, [SP], #0x10
+	LDP 	X22, X23, [SP], #0x10
+	LDP 	X20, X21, [SP], #0x10
+	LDP 	X18, X19, [SP], #0x10
+	LDP 	X16, X17, [SP], #0x10
+	LDP 	X14, X15, [SP], #0x10
+	LDP 	X12, X13, [SP], #0x10
+	LDP 	X10, X11, [SP], #0x10
+	LDP 	X8, X9, [SP], #0x10
+	LDP 	X6, X7, [SP], #0x10
+	LDP 	X4, X5, [SP], #0x10
+	LDP 	X2, X3, [SP], #0x10
+	LDP 	X0, X1, [SP], #0x10
+
+	ERET
 
 
 
@@ -768,11 +793,10 @@ GPUaddrToARMaddr:
 .globl setFiqFuncAddress;
 .type setFiqFuncAddress, %function
 setFiqFuncAddress:
-	msr daifset,#1							// Disable fiq interrupts as we are clearly changing call
 	ldr x1, =RPi_FiqFuncAddr				// Load address of function to call on interrupt 
 	ldr x2, [x1]							// Load current fiq call address
 	str x0, [x1]							// Store the new function pointer address we were given
-	mov x0, x2								// return the old call function
+	mov x2, x0								// transfer x2 for return						
 	ret										// Return
 .balign	4
 .ltorg										// Tell assembler ltorg data for this code can go here
@@ -874,7 +898,7 @@ taskInitialiseStack:
 	str x3, [x0, #-8]!           //  XZR
 	mov x3, #0x0000000000000000
 	str x3, [x0, #-8]!           //  X30
-	mov x3, # 0x345
+	mov x3, # 0x305				 // Enter with FIQ and IRQ enabled
 	str x3, [x0, #-8]!           // portINITIAL_PSTATE
 	str x1, [x0, #-8]!           // pxCode address
 	ret										// Return

@@ -6,12 +6,22 @@ Okay we have added only two functions but we will now have a lot happening in th
 
 So our first function we have added is
 ##### void xTaskWaitOnMessage (const RegType_t userMessageID);
-So with this call we can ask a task to wait via a unique message ID we will provide. The task will remove itself from the ready list and insert itself in the "waiting for message" list. In doing so it stops receiving any CPU time so consumes no CPU time while it waits.
+So with this call we can ask a task to wait via a unique message ID we will provide. The task will remove itself from the ready list and insert itself in the "waiting for message" list. In doing so it stops receiving any CPU time so consumes no CPU time while it waits. So it acts a lot like xTaskDelay but is released by a message usually from another task rather than a period of time.
 
 Our second function we have added is
 ##### void xTaskReleaseMessage(const RegType_t userMessageID);
 
-This function first looks in the current core "waiting for message" list and if it finds a task with that unique ID it will return that task to the ready list to again resume processing. If the task is not found it repeats the same test in the other core "waiting for message" lists. So this is our first example of a real cross core communication.
+This function first looks in the current core "waiting for message" list and if it finds a task with that unique ID it will return that task to the ready list to again resume processing. If the task is not found it sends an IPC message to other cores for them the check their "waiting for message" lists. So this is our first example of a real cross core communication.
+
+On the Pi as defined via QA7 each core has 4 32bit hardware intercore mailbox hardware as described in the errata datasheet QA7
+https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2836/QA7_rev3.4.pdf
+
+ For our IPC message we have connected mailbox 0 to the FIQ interrupt of that core. So the act of writing to mailbox 0 of core 0 will generate an FIQ on core 0, writing to mailbox 0 of core 1 will generate an FIQ on core 1 etc. So xTaskReleaseMessage if it can not find the message in it's core will write the message ID to mailbox0 of the other 3 cores.
+
+To do this we need a semaphore for mailbox0 because multiple tasks could be trying to Release Tasks at the same time. So when a task wishes to send an IPC message it must first take the mailbox0 semaphore for the core it is sending to. Once it has the semaphore it sends the message and exits. The core that recieves the message will give the semaphore back and so any waiting tasks can then post their message.
+
+So here we a have the example of a low level semaphore providing protection for a much higher level IPC communication.
+
 
 So on the example we define two unique ID's
 ~~~
@@ -44,9 +54,4 @@ So now the blue bar and the green bar move in lock step.
 
 It should be obvious we can now at least synchronize tasks both on the same core and across cores.
 
-There is actually a problem with the current setup that the core releasing a task is accessing the data of another core so it needs to be lockless or primitive synched. It will be fine at the moment simply because there is only one message lock on any given core. What we really want to do is get the other core itself to search and release the task by unique message ID. That way no core accesses another cores data which is a nice partition to have.
-
-So to do that we are going to use the 32bit hardware intercore mailbox as described in the errata datasheet QA7
-https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2836/QA7_rev3.4.pdf
-
-So we will pick that concept up in the next example and then having got inter core communication established we will look at an L1/L2 scheduler as the cores can synchronize when required.
+So we now have some basic inter core communication established we will next look at an L1/L2 scheduler as the cores can synchronize when required.

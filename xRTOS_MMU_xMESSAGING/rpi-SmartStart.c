@@ -604,141 +604,6 @@ struct __attribute__((__packed__, aligned(4))) PL011UARTRegisters {
 };
 
 /*--------------------------------------------------------------------------}
-{    LOCAL TIMER INTERRUPT ROUTING REGISTER - QA7_rev3.4.pdf page 18		}
-{--------------------------------------------------------------------------*/
-typedef union
-{
-	struct
-	{
-		enum {
-			LOCALTIMER_TO_CORE0_IRQ = 0,
-			LOCALTIMER_TO_CORE1_IRQ = 1,
-			LOCALTIMER_TO_CORE2_IRQ = 2,
-			LOCALTIMER_TO_CORE3_IRQ = 3,
-			LOCALTIMER_TO_CORE0_FIQ = 4,
-			LOCALTIMER_TO_CORE1_FIQ = 5,
-			LOCALTIMER_TO_CORE2_FIQ = 6,
-			LOCALTIMER_TO_CORE3_FIQ = 7,
-		} Routing : 3;												// @0-2		Local Timer routing 
-		unsigned unused : 29;										// @3-31
-	};
-	uint32_t Raw32;													// Union to access all 32 bits as a uint32_t
-} local_timer_int_route_reg_t;
-
-/*--------------------------------------------------------------------------}
-{    LOCAL TIMER CONTROL AND STATUS REGISTER - QA7_rev3.4.pdf page 17		}
-{--------------------------------------------------------------------------*/
-typedef union
-{
-	struct
-	{
-		unsigned ReloadValue : 28;									// @0-27	Reload value 
-		unsigned TimerEnable : 1;									// @28		Timer enable (1 = enabled) 
-		unsigned IntEnable : 1;										// @29		Interrupt enable (1= enabled)
-		unsigned unused : 1;										// @30		Unused
-		unsigned IntPending : 1;									// @31		Timer Interrupt flag (Read-Only) 
-	};
-	uint32_t Raw32;													// Union to access all 32 bits as a uint32_t
-} local_timer_ctrl_status_reg_t;
-
-/*--------------------------------------------------------------------------}
-{     LOCAL TIMER CLEAR AND RELOAD REGISTER - QA7_rev3.4.pdf page 18		}
-{--------------------------------------------------------------------------*/
-typedef union
-{
-	struct
-	{
-		unsigned unused : 30;										// @0-29	unused 
-		unsigned Reload : 1;										// @30		Local timer-reloaded when written as 1 
-		unsigned IntClear : 1;										// @31		Interrupt flag clear when written as 1  
-	};
-	uint32_t Raw32;													// Union to access all 32 bits as a uint32_t
-} local_timer_clr_reload_reg_t;
-
-/*--------------------------------------------------------------------------}
-{    GENERIC TIMER INTERRUPT CONTROL REGISTER - QA7_rev3.4.pdf page 13		}
-{--------------------------------------------------------------------------*/
-typedef union
-{
-	struct
-	{
-		unsigned nCNTPSIRQ_IRQ : 1;									// @0		Secure physical timer event IRQ enabled, This bit is only valid if bit 4 is clear otherwise it is ignored. 
-		unsigned nCNTPNSIRQ_IRQ : 1;								// @1		Non-secure physical timer event IRQ enabled, This bit is only valid if bit 5 is clear otherwise it is ignored
-		unsigned nCNTHPIRQ_IRQ : 1;									// @2		Hypervisor physical timer event IRQ enabled, This bit is only valid if bit 6 is clear otherwise it is ignored
-		unsigned nCNTVIRQ_IRQ : 1;									// @3		Virtual physical timer event IRQ enabled, This bit is only valid if bit 7 is clear otherwise it is ignored
-		unsigned nCNTPSIRQ_FIQ : 1;									// @4		Secure physical timer event FIQ enabled, If set, this bit overrides the IRQ bit (0) 
-		unsigned nCNTPNSIRQ_FIQ : 1;								// @5		Non-secure physical timer event FIQ enabled, If set, this bit overrides the IRQ bit (1)
-		unsigned nCNTHPIRQ_FIQ : 1;									// @6		Hypervisor physical timer event FIQ enabled, If set, this bit overrides the IRQ bit (2)
-		unsigned nCNTVIRQ_FIQ : 1;									// @7		Virtual physical timer event FIQ enabled, If set, this bit overrides the IRQ bit (3)
-		unsigned reserved : 24;										// @8-31	reserved
-	};
-	uint32_t Raw32;													// Union to access all 32 bits as a uint32_t
-} generic_timer_int_ctrl_reg_t;
-
-
-/*--------------------------------------------------------------------------}
-{       MAILBOX INTERRUPT CONTROL REGISTER - QA7_rev3.4.pdf page 14			}
-{--------------------------------------------------------------------------*/
-typedef union
-{
-	struct
-	{
-		unsigned Mailbox0_IRQ : 1;									// @0		Set IRQ enabled, This bit is only valid if bit 4 is clear otherwise it is ignored. 
-		unsigned Mailbox1_IRQ : 1;									// @1		Set IRQ enabled, This bit is only valid if bit 5 is clear otherwise it is ignored
-		unsigned Mailbox2_IRQ : 1;									// @2		Set IRQ enabled, This bit is only valid if bit 6 is clear otherwise it is ignored
-		unsigned Mailbox3_IRQ : 1;									// @3		Set IRQ enabled, This bit is only valid if bit 7 is clear otherwise it is ignored
-		unsigned Mailbox0_FIQ : 1;									// @4		Set FIQ enabled, If set, this bit overrides the IRQ bit (0) 
-		unsigned Mailbox1_FIQ : 1;									// @5		Set FIQ enabled, If set, this bit overrides the IRQ bit (1)
-		unsigned Mailbox2_FIQ : 1;									// @6		Set FIQ enabled, If set, this bit overrides the IRQ bit (2)
-		unsigned Mailbox3_FIQ : 1;									// @7		Set FIQ enabled, If set, this bit overrides the IRQ bit (3)
-		unsigned reserved : 24;										// @8-31	reserved
-	};
-	uint32_t Raw32;													// Union to access all 32 bits as a uint32_t
-} mailbox_int_ctrl_reg_t;
-
-/*--------------------------------------------------------------------------}
-{		 CORE INTERRUPT SOURCE REGISTER - QA7_rev3.4.pdf page 16			}
-{--------------------------------------------------------------------------*/
-typedef union
-{
-	struct
-	{
-		unsigned CNTPSIRQ : 1;										// @0		CNTPSIRQ  interrupt 
-		unsigned CNTPNSIRQ : 1;										// @1		CNTPNSIRQ  interrupt 
-		unsigned CNTHPIRQ : 1;										// @2		CNTHPIRQ  interrupt 
-		unsigned CNTVIRQ : 1;										// @3		CNTVIRQ  interrupt 
-		unsigned Mailbox0_Int : 1;									// @4		Set FIQ enabled, If set, this bit overrides the IRQ bit (0) 
-		unsigned Mailbox1_Int : 1;									// @5		Set FIQ enabled, If set, this bit overrides the IRQ bit (1)
-		unsigned Mailbox2_Int : 1;									// @6		Set FIQ enabled, If set, this bit overrides the IRQ bit (2)
-		unsigned Mailbox3_Int : 1;									// @7		Set FIQ enabled, If set, this bit overrides the IRQ bit (3)
-		unsigned GPU_Int : 1;										// @8		GPU interrupt <Can be high in one core only> 
-		unsigned PMU_Int : 1;										// @9		PMU interrupt 
-		unsigned AXI_Int : 1;										// @10		AXI-outstanding interrupt <For core 0 only!> all others are 0 
-		unsigned Timer_Int : 1;										// @11		Local timer interrupt
-		unsigned GPIO_Int : 16;										// @12-27	Peripheral 1..15 interrupt (Currently not used
-		unsigned reserved : 4;										// @28-31	reserved
-	};
-	uint32_t Raw32;													// Union to access all 32 bits as a uint32_t
-} core_int_source_reg_t;
-
-/*--------------------------------------------------------------------------}
-{					 ALL QA7 REGISTERS IN ONE BIG STRUCTURE					}
-{--------------------------------------------------------------------------*/
-struct __attribute__((__packed__, aligned(4))) QA7Registers {
-	local_timer_int_route_reg_t TimerRouting;						// 0x24
-	uint32_t GPIORouting;											// 0x28
-	uint32_t AXIOutstandingCounters;								// 0x2C
-	uint32_t AXIOutstandingIrq;										// 0x30
-	local_timer_ctrl_status_reg_t TimerControlStatus;				// 0x34
-	local_timer_clr_reload_reg_t TimerClearReload;					// 0x38
-	uint32_t unused;												// 0x3C
-	generic_timer_int_ctrl_reg_t CoreTimerIntControl[4];			// 0x40, 0x44, 0x48, 0x4C  .. One per core
-	mailbox_int_ctrl_reg_t  CoreMailboxIntControl[4];				// 0x50, 0x54, 0x58, 0x5C  .. One per core
-	core_int_source_reg_t CoreIRQSource[4];							// 0x60, 0x64, 0x68, 0x6C  .. One per core
-	core_int_source_reg_t CoreFIQSource[4];							// 0x70, 0x74, 0x78, 0x7C  .. One per core
-};
-
-/*--------------------------------------------------------------------------}
 {						RASPBERRY PI MODEL NUMBER 							}
 {--------------------------------------------------------------------------*/
 /* https://github.com/raspberrypi/documentation/blob/master/hardware/raspberrypi/revision-codes/README.md */
@@ -781,7 +646,7 @@ static_assert(sizeof(struct IrqControlRegisters) == 0x28, "Structure IrqControlR
 static_assert(sizeof(struct MailBoxRegisters) == 0x40, "Structure MailBoxRegisters should be 0x40 bytes in size");
 static_assert(sizeof(struct MiniUARTRegisters) == 0x2C, "MiniUARTRegisters should be 0x2C bytes in size");
 static_assert(sizeof(struct PL011UARTRegisters) == 0x4C, "PL011UARTRegisters should be 0x4C bytes in size");
-static_assert(sizeof(struct QA7Registers) == 0x5C, "QA7Registers should be 0x5C bytes in size");
+
 
 /***************************************************************************}
 {     PRIVATE POINTERS TO ALL OUR RASPBERRY PI REGISTER BANK STRUCTURES	    }
@@ -793,7 +658,6 @@ static_assert(sizeof(struct QA7Registers) == 0x5C, "QA7Registers should be 0x5C 
 #define MAILBOX ((volatile __attribute__((aligned(4))) struct MailBoxRegisters*)(uintptr_t)(RPi_IO_Base_Addr + 0xB880))
 #define MINIUART ((volatile struct MiniUARTRegisters*)(uintptr_t)(RPi_IO_Base_Addr + 0x00215040))
 #define PL011UART ((volatile struct PL011UARTRegisters*)(uintptr_t)(RPi_IO_Base_Addr + 0x00201000))
-#define QA7 ((volatile __attribute__((aligned(4))) struct QA7Registers*)(uintptr_t)(0x40000024))
 
 /***************************************************************************}
 {				   ARM CPU ID STRINGS THAT WILL BE RETURNED				    }
@@ -1182,84 +1046,7 @@ uintptr_t TimerFiqSetup (uint32_t period_in_us, 					// Period between timer int
 	return oldHandler;												// Return result	
 }
 
-/*==========================================================================}
-{  PUBLIC PI MULTICORE LOCAL TIMER ROUTINES PROVIDED BY RPi-SmartStart API	}
-{==========================================================================*/
 
-/*-[ClearLocalTimerIrq]-----------------------------------------------------}
-. Simply clear the local timer interupt by hitting the clear registers. Any
-. irq/fiq local timer interrupt should call this before exiting.
-.--------------------------------------------------------------------------*/
-void ClearLocalTimerIrq(void)
-{
-	QA7->TimerClearReload.IntClear = 1;								// Clear interrupt
-	QA7->TimerClearReload.Reload = 1;								// Reload now
-}
-
-/*-[LocalTimerSetup]--------------------------------------------------------}
-. Sets the clock rate to the period in usec for the local clock timer.
-. Largest period is around 16 million usec (16 sec) it varies on core speed.
-. All cores share this clock so setting it from any core changes all cores.
-. RETURN: TRUE if successful,  FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerSetup (uint32_t period_in_us)						// Period between timer interrupts in usec
-{
-	if (RPi_CpuId.PartNumber != 0xB76)								// ARM6 cpu is single core and this clock does not exist
-	{
-		volatile uint32_t divisor = 384 * period_in_us;				// Transfer the period * 384
-		divisor /= 10;												// That is divisor required as clock is 38.4Mhz (2*19.2Mhz)
-		QA7->TimerControlStatus.ReloadValue = divisor;				// Timer period set
-		QA7->TimerControlStatus.TimerEnable = 1;					// Timer enabled
-		QA7->TimerClearReload.Reload = 1;							// Reload now
-		return true;												// Timer successfully set
-	}
-	return false;
-}
-
-
-/*-[LocalTimerIrqSetup]-----------------------------------------------------}
-. The local timer irq interrupt rate is set to the period in usec between
-. triggers. On BCM2835 (ARM6) it does not have core timer so call fails.
-. Largest period is around 16 million usec (16 sec) it varies on core speed
-. RETURN: TRUE if successful, FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerIrqSetup (uint32_t period_in_us,						// Period between timer interrupts in usec
-						 uint8_t coreNum)							// Core number
-{
-	if (LocalTimerSetup(period_in_us))								// Peripheral time set successful
-	{
-		QA7->TimerRouting.Routing = LOCALTIMER_TO_CORE0_IRQ + coreNum;// Route local timer IRQ to given Core
-		QA7->TimerControlStatus.IntEnable = 1;						// Timer IRQ enabled
-		QA7->TimerClearReload.IntClear = 1;							// Clear interrupt
-		QA7->TimerClearReload.Reload = 1;							// Reload now
-		QA7->CoreTimerIntControl[coreNum].nCNTPNSIRQ_IRQ = 1;		// We are in NS EL1 so enable IRQ to core
-		QA7->CoreTimerIntControl[coreNum].nCNTPNSIRQ_FIQ = 0;		// Make sure FIQ is zero
-		return true;												// Return success									
-	}
-	return false;													// Return failure	
-}
-
-/*-[LocalTimerFiqSetup]-----------------------------------------------------}
-. The local timer fiq interrupt rate is set to the period in usec between
-. triggers. On BCM2835 (ARM6) it does not have core timer so call fails.
-. Largest period is around 16 million usec (16 sec) it varies on core speed
-. RETURN: TRUE if successful, FALSE for any failure
-.--------------------------------------------------------------------------*/
-bool LocalTimerFiqSetup (uint32_t period_in_us,						// Period between timer interrupts in usec
-						 uint8_t coreNum)							// Core number
-{
-	if (LocalTimerSetup(period_in_us))								// Peripheral time set successful
-	{
-		QA7->TimerRouting.Routing = LOCALTIMER_TO_CORE0_FIQ + coreNum;// Route local timer FIQ to given Core
-		QA7->TimerControlStatus.IntEnable = 1;						// Timer IRQ enabled
-		QA7->TimerClearReload.IntClear = 1;							// Clear interrupt
-		QA7->TimerClearReload.Reload = 1;							// Reload now
-		QA7->CoreTimerIntControl[coreNum].nCNTPNSIRQ_FIQ = 1;		// We are in NS EL1 so enable FIQ to core
-		QA7->CoreTimerIntControl[coreNum].nCNTPNSIRQ_IRQ = 0;		// Make sure IRQ is zero
-		return true;												// Return success									
-	}
-	return false;													// Return failure	
-}
 
 /*==========================================================================}
 {				           MINIUART ROUTINES								}
